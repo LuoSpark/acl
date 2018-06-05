@@ -92,7 +92,13 @@ static ACL_SOCKET inet_connect_one(const struct addrinfo *peer,
 			peer->ai_addrlen, timeout) < 0)
 #endif
 		{
+#ifdef ACL_WINDOWS
+			int err = acl_last_error();
+#endif
 			acl_socket_close(sock);
+#ifdef ACL_WINDOWS
+			acl_set_error(err);
+#endif
 			return ACL_SOCKET_INVALID;
 		}
 		if (blocking != ACL_NON_BLOCKING)
@@ -129,7 +135,13 @@ static ACL_SOCKET inet_connect_one(const struct addrinfo *peer,
 			if (errno == EPIPE)
 				acl_set_error(ACL_ENOTCONN);
 #endif
+#ifdef ACL_WINDOWS
+			err = acl_last_error();
+#endif
 			acl_socket_close(sock);
+#ifdef ACL_WINDOWS
+			acl_set_error(err);
+#endif
 			return ACL_SOCKET_INVALID;
 		} else if (err != 0) {
 			errnum = err;
@@ -144,9 +156,11 @@ static ACL_SOCKET inet_connect_one(const struct addrinfo *peer,
 			return sock;
 #endif
 		acl_socket_close(sock);
+#ifdef ACL_WINDOWS
+		acl_set_error(errnum);
+#endif
 		return ACL_SOCKET_INVALID;
 	}
-
 	return sock;
 }
 
@@ -206,7 +220,10 @@ ACL_SOCKET acl_inet_connect_ex(const char *addr, int blocking,
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family   = PF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
-#ifdef	ACL_MACOSX
+
+#if	defined(ACL_FREEBSD)
+	hints.ai_flags    = 0;
+#elif	defined(ACL_MACOSX)
 	hints.ai_flags    = AI_DEFAULT;
 #elif	defined(ACL_ANDROID)
 	hints.ai_flags    = AI_ADDRCONFIG;

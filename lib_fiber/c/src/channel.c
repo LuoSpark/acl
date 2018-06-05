@@ -1,13 +1,51 @@
 /* Copyright (c) 2005 Russ Cox, MIT; see COPYRIGHT */
 
 #include "stdafx.h"
+#include "common.h"
 #include "fiber.h"
+
+enum
+{
+	CHANEND,
+	CHANSND,
+	CHANRCV,
+	CHANNOP,
+	CHANNOBLK,
+};
+
+typedef struct FIBER_ALT FIBER_ALT;
+typedef struct FIBER_ALT_ARRAY FIBER_ALT_ARRAY;
+
+struct FIBER_ALT {
+	ACL_CHANNEL   *c;
+	void          *v;
+	unsigned int   op;
+	ACL_FIBER     *fiber;
+	FIBER_ALT     *xalt;
+};
+
+struct FIBER_ALT_ARRAY {
+	FIBER_ALT  **a;
+	unsigned int n;
+	unsigned int m;
+};
+
+struct ACL_CHANNEL {
+	unsigned int    bufsize;
+	unsigned int    elemsize;
+	unsigned char  *buf;
+	unsigned int    nbuf;
+	unsigned int    off;
+	FIBER_ALT_ARRAY asend;
+	FIBER_ALT_ARRAY arecv;
+	char           *name;
+};
 
 ACL_CHANNEL* acl_channel_create(int elemsize, int bufsize)
 {
 	ACL_CHANNEL *c;
 
-	c = (ACL_CHANNEL *) acl_mycalloc(1, sizeof(*c) + bufsize * elemsize);
+	c = (ACL_CHANNEL *) calloc(1, sizeof(*c) + bufsize * elemsize);
 	c->elemsize = elemsize;
 	c->bufsize  = bufsize;
 	c->nbuf     = 0;
@@ -20,12 +58,12 @@ void acl_channel_free(ACL_CHANNEL *c)
 {
 	if(c != NULL) {
 		if (c->name)
-			acl_myfree(c->name);
+			free(c->name);
 		if (c->arecv.a)
-			acl_myfree(c->arecv.a);
+			free(c->arecv.a);
 		if (c->asend.a)
-			acl_myfree(c->asend.a);
-		acl_myfree(c);
+			free(c->asend.a);
+		free(c);
 	}
 }
 
@@ -33,7 +71,7 @@ static void array_add(FIBER_ALT_ARRAY *a, FIBER_ALT *alt)
 {
 	if (a->n == a->m) {
 		a->m += 16;
-		a->a = acl_myrealloc(a->a, a->m * sizeof(a->a[0]));
+		a->a = realloc(a->a, a->m * sizeof(a->a[0]));
 	}
 
 	a->a[a->n++] = alt;
@@ -102,7 +140,7 @@ static void alt_dequeue(FIBER_ALT *a)
 
 	ar = channel_array(a->c, a->op);
 	if (ar == NULL)
-		acl_msg_fatal("%s(%d), %s: bad use of altdequeue op=%d",
+		msg_fatal("%s(%d), %s: bad use of altdequeue op=%d",
 			__FILE__, __LINE__, __FUNCTION__, a->op);
 
 	for (i = 0; i < ar->n; i++) {
@@ -112,7 +150,7 @@ static void alt_dequeue(FIBER_ALT *a)
 		}
 	}
 
-	acl_msg_fatal("%s(%d), %s: cannot find self in altdq",
+	msg_fatal("%s(%d), %s: cannot find self in altdq",
 		__FILE__, __LINE__, __FUNCTION__);
 }
 
@@ -304,7 +342,7 @@ static int channel_alt(FIBER_ALT a[])
 	 * the guy who ran the op took care of dequeueing us
 	 * and then set a[0].alt to the one that was executed.
 	 */
-	return a[0].xalt - a;
+	return (int) (a[0].xalt - a);
 }
 
 static int channel_op(ACL_CHANNEL *c, int op, void *p, int canblock)

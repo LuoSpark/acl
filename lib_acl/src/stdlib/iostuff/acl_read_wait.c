@@ -135,7 +135,7 @@ int acl_read_epoll_wait(ACL_SOCKET fd, int delay)
 		}
 	}
 
-	ee.events = EPOLLIN | EPOLLHUP | EPOLLERR;
+	ee.events = EPOLLIN;
 	ee.data.u64 = 0;
 	ee.data.fd = fd;
 
@@ -211,21 +211,17 @@ int acl_read_epoll_wait(ACL_SOCKET fd, int delay)
 			acl_set_error(ACL_ETIMEDOUT);
 			ret = -1;
 			break;
-		} else if ((events[0].events & (EPOLLERR | EPOLLHUP)) != 0) {
-			acl_msg_warn("%s(%d), %s: poll error: %s, fd: %d, "
-				"delay: %d, spent: %ld", __FILE__, __LINE__,
-				myname, acl_last_serror(), fd, delay,
-				(long) (time(NULL) - begin));
-			ret = -1;
-		} else if ((events[0].events & EPOLLIN) == 0) {
-			acl_msg_warn("%s(%d), %s: poll error: %s, fd: %d, "
-				"delay: %d, spent: %ld", __FILE__, __LINE__,
-				myname, acl_last_serror(), fd, delay,
-				(long) (time(NULL) - begin));
-			acl_set_error(ACL_ETIMEDOUT);
-			ret = -1;
-		} else
+		} else if ((events[0].events & EPOLLIN) != 0) {
 			ret = 0;
+		} else if ((events[0].events & (EPOLLERR | EPOLLHUP)) != 0) {
+			ret = 0;
+		} else {
+			acl_msg_warn("%s(%d), %s: poll error: %s, fd: %d, "
+				"delay: %d, spent: %ld", __FILE__, __LINE__,
+				myname, acl_last_serror(), fd, delay,
+				(long) (time(NULL) - begin));
+			ret = -1;
+		}
 		break;
 	}
 
@@ -245,7 +241,26 @@ int acl_read_epoll_wait(ACL_SOCKET fd, int delay)
 
 #endif
 
-#if defined(ACL_UNIX)
+#if defined(ACL_HAS_POLL)
+
+# if defined(ACL_WINDOWS)
+static acl_poll_fn __sys_poll = WSAPoll;
+# else
+static acl_poll_fn __sys_poll = poll;
+# endif
+
+/* xxx: defined in acl_write_wait.c */
+extern void set_poll4write(acl_poll_fn fn);
+
+static void set_poll4read(acl_poll_fn fn)
+{
+	__sys_poll = fn;
+}
+
+void acl_set_poll(acl_poll_fn fn)
+{
+	set_poll4read(fn);
+}
 
 int acl_read_poll_wait(ACL_SOCKET fd, int delay)
 {
@@ -253,7 +268,7 @@ int acl_read_poll_wait(ACL_SOCKET fd, int delay)
 	struct pollfd fds;
 	time_t begin;
 
-	fds.events = POLLIN | POLLHUP | POLLERR;
+	fds.events = POLLIN;
 	fds.fd = fd;
 
 	acl_set_error(0);
@@ -261,8 +276,12 @@ int acl_read_poll_wait(ACL_SOCKET fd, int delay)
 	for (;;) {
 		time(&begin);
 
-		switch (poll(&fds, 1, delay)) {
+		switch (__sys_poll(&fds, 1, delay)) {
+#ifdef ACL_WINDOWS
+		case SOCKET_ERROR:
+#else
 		case -1:
+#endif
 			if (acl_last_error() == ACL_EINTR)
 				continue;
 
@@ -280,23 +299,23 @@ int acl_read_poll_wait(ACL_SOCKET fd, int delay)
 			acl_set_error(ACL_ETIMEDOUT);
 			return -1;
 		default:
-			if ((fds.revents & POLLIN))
+			if ((fds.revents & POLLIN)) {
 				return 0;
-			else if (fds.revents & (POLLHUP | POLLERR)) {
-				acl_msg_warn("%s(%d), %s: poll error: %s, "
-					"fd: %d, delay: %d, spent: %ld",
-					__FILE__, __LINE__, myname,
-					acl_last_serror(), fd, delay,
-					(long) (time(NULL) - begin));
-				return -1;
-			} else {
-				acl_msg_warn("%s(%d), %s: poll error: %s, "
-					"fd: %d, delay: %d, spent: %ld",
-					__FILE__, __LINE__, myname,
-					acl_last_serror(), fd, delay,
-					(long) (time(NULL) - begin));
-				return -1;
 			}
+			if (fds.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+				acl_msg_warn("%s(%d), %s: poll error: %s, "
+					"fd: %d, delay: %d, spent: %ld",
+					__FILE__, __LINE__, myname,
+					acl_last_serror(), fd, delay,
+					(long) (time(NULL) - begin));
+				return 0;
+			}
+
+			acl_msg_warn("%s(%d), %s: poll error: %s, fd: %d, "
+				"delay: %d, spent: %ld", __FILE__, __LINE__,
+				myname, acl_last_serror(), fd, delay,
+				(long) (time(NULL) - begin));
+			return -1;
 		}
 	}
 }
@@ -373,6 +392,13 @@ int acl_read_iocp_wait(ACL_SOCKET fd, int timeout)
 
 #endif
 
+static acl_select_fn __sys_select = select;
+
+void acl_set_select(acl_select_fn fn)
+{
+	__sys_select = fn;
+}
+
 int acl_read_select_wait(ACL_SOCKET fd, int delay)
 {
 	const char *myname = "acl_read_select_wait";
@@ -416,9 +442,9 @@ int acl_read_select_wait(ACL_SOCKET fd, int delay)
 		time(&begin);
 
 #ifdef ACL_WINDOWS
-		switch (select(1, &rfds, (fd_set *) 0, &xfds, tp)) {
+		switch (__sys_select(1, &rfds, (fd_set *) 0, &xfds, tp)) {
 #else
-		switch (select(fd + 1, &rfds, (fd_set *) 0, &xfds, tp)) {
+		switch (__sys_select(fd + 1, &rfds, (fd_set *) 0, &xfds, tp)) {
 #endif
 		case -1:
 			errnum = acl_last_error();
@@ -456,7 +482,7 @@ int acl_read_wait(ACL_SOCKET fd, int timeout)
 {
 #if defined(ACL_LINUX) && !defined(MINGW) && defined(USE_EPOLL)
 	return acl_read_epoll_wait(fd, timeout * 1000);
-#elif defined(ACL_UNIX)
+#elif defined(ACL_HAS_POLL)
 	return acl_read_poll_wait(fd, timeout * 1000);
 #else
 	return acl_read_select_wait(fd, timeout * 1000);

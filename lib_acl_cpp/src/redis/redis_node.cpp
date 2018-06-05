@@ -28,7 +28,12 @@ redis_node& redis_node::set_id(const char* id)
 
 redis_node& redis_node::set_addr(const char* addr)
 {
-	addr_ = addr;
+	addr_info_ = addr;
+	int pos = addr_info_.find('@');
+	if (pos <= 0)
+		addr_ = addr_info_;
+	else
+		addr_.copy(addr_info_, pos);
 	return *this;
 }
 

@@ -29,8 +29,9 @@ LOG_PATH=$HOME_PATH/var/log/acl_master
 lockfile=/var/lock/subsys/acl_master
 
 # Source function library.
+# don't use systemd --zsx
+SYSTEMCTL_SKIP_REDIRECT=1
 . /etc/rc.d/init.d/functions
-
 
 # A function to find the pid of a program. Looks *only* at the pidfile
 findpidfileofproc() {
@@ -54,7 +55,11 @@ start() {
     fi
     [ -x $exec ] || exit 5
     echo -n $"Starting $prog: "
-    daemon $exec -c $CONF_PATH -l $LOG_PATH &
+    ulimit -c unlimited
+    ulimit -n 204800
+    trap '' 1
+    #daemon --pidfile=${PID_FILE} 
+    $exec -c $CONF_PATH -l $LOG_PATH &
     sleep 1
     rh_status_q && success
     echo
@@ -83,6 +88,7 @@ stop() {
 
 restart() {
     stop
+    sleep 1
     start
 }
 

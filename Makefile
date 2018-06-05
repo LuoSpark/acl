@@ -78,7 +78,7 @@ endif
 ##############################################################################
 
 .PHONY = check help all_lib all samples all clean install uninstall uninstall_all build_one
-VERSION = 3.3.1.rc1
+VERSION = 3.4.1-0
 
 default: build_one
 help h:
@@ -97,7 +97,7 @@ all_lib:
 #	@(cd lib_acl_cpp; make pch)
 	@(cd lib_acl_cpp; make $(MAKE_ARGS))
 	@(cd lib_rpc; make $(MAKE_ARGS))
-	@if test "$(OSNAME)" = "Linux"; then cd lib_fiber; make; fi
+	@if test "$(OSNAME)" = "Linux" -o "$(OSNAME)" = "FreeBSD" -o "$(OSNAME)" = "Darwin"; then cd lib_fiber; make; fi
 all_samples: all_lib
 	@(cd unit_test; make $(MAKE_ARGS))
 	@(cd lib_acl/samples; make)
@@ -123,7 +123,11 @@ clean cl:
 
 acl_master: all_lib
 	@(cd app/master/daemon; make $(MAKE_ARGS); make install)
+	@(cd app/master/tools/lib_global; make $(MAKE_ARGS);)
 	@(cd app/master/tools/master_ctld; make $(MAKE_ARGS); make install)
+	@(cd app/master/tools/master_ctl; make $(MAKE_ARGS); make install)
+	@(cd app/master/tools/master_guard; make $(MAKE_ARGS); make install)
+	@(cd app/master/tools/master_monitor; make $(MAKE_ARGS); make install)
 
 packinstall:
 	@(echo "")
@@ -138,6 +142,9 @@ packinstall:
 	$(shell mkdir -p ./dist/master/bin/$(RPATH))
 	@(cd app/master/daemon; make install)
 	@(cd app/master/tools/master_ctld; make install)
+	@(cd app/master/tools/master_ctl; make install)
+	@(cd app/master/tools/master_guard; make install)
+	@(cd app/master/tools/master_monitor; make install)
 	@(cd lib_fiber; make)
 	@echo "copying app/master/daemon/acl_master $(BIN_PATH)"
 	@cp -f app/master/daemon/acl_master $(BIN_PATH)

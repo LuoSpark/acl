@@ -90,7 +90,7 @@ static void fiber_connect(ACL_FIBER *fiber acl_unused, void *ctx)
 			__total_count, spent,
 			(__total_count * 1000) / (spent > 0 ? spent : 1));
 
-		acl_fiber_schedule_stop();
+		//acl_fiber_schedule_stop();
 	}
 }
 
@@ -101,7 +101,7 @@ static void fiber_main(ACL_FIBER *fiber acl_unused, void *ctx)
 
 	for (i = 0; i < __max_fibers; i++)
 	{
-		acl_fiber_create(fiber_connect, addr, 32768);
+		acl_fiber_create(fiber_connect, addr, 327680);
 		//acl_fiber_sleep(1);
 	}
 }
@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
 
 	gettimeofday(&__begin, NULL);
 
-	acl_fiber_create(fiber_main, addr, 32768);
+	acl_fiber_create(fiber_main, addr, 327680);
 
 	printf("call fiber_schedule\r\n");
 

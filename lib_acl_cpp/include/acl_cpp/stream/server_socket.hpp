@@ -1,5 +1,6 @@
 #pragma once
 #include "../acl_cpp_define.hpp"
+#include "../stdlib/string.hpp"
 #if defined(_WIN32) || defined(_WIN64)
 #include <WinSock2.h>
 #endif
@@ -7,6 +8,12 @@
 namespace acl {
 
 class socket_stream;
+
+typedef enum {
+	OPEN_FLAG_NONE      = 0,
+	OPEN_FLAG_NONBLOCK  = 1,	// 非阻塞模式
+	OPEN_FLAG_REUSEPORT = 1 << 1,	// 端口复用，要求 Linux3.0 以上
+} open_flag_t;
 
 /**
  * 服务端监听套接口类，接收客户端连接，并创建客户端流连接对象
@@ -19,7 +26,14 @@ public:
 	 * @param backlog {int} 监听套接口队列长度
 	 * @param block {bool} 是阻塞模式还是非阻塞模式
 	 */
-	server_socket(int backlog = 128, bool block = true);
+	explicit server_socket(int backlog = 128, bool block = true);
+
+	/**
+	 * 构造函数
+	 * @param flag {unsigned} 定义参见 OPEN_FLAG_XXX
+	 * @param backlog {int} 监听套接口队列长度
+	 */
+	explicit server_socket(open_flag_t flag, int backlog = 128);
 
 	/**
 	 * 构造函数，调用本构造函数后禁止再调用 open 方法
@@ -51,10 +65,26 @@ public:
 	bool open(const char* addr);
 
 	/**
+	 * 判断当前监听套接口是否打开着
+	 * @return {bool}
+	 */
+	bool opened(void) const;
+
+	/**
 	 * 关闭已经打开的监听套接口
 	 * @return {bool} 是否正常关闭
 	 */
 	bool close();
+
+	/**
+	 * 将监听套接口从服务监听对象中解绑
+	 * @return {SOCKET} 返回被解绑的句柄
+	 */
+#if defined(_WIN32) || defined(_WIN64)
+	SOCKET unbind();
+#else
+	int unbind();
+#endif
 
 	/**
 	 * 接收客户端连接并创建客户端连接流
@@ -70,7 +100,7 @@ public:
 	 */
 	const char* get_addr() const
 	{
-		return addr_;
+		return addr_.c_str();
 	}
 
 	/**
@@ -95,10 +125,10 @@ public:
 	void set_tcp_defer_accept(int timeout);
 
 private:
-	int   backlog_;
-	bool  block_;
-	bool  unix_sock_;
-	char  addr_[64];
+	int      backlog_;
+	unsigned open_flag_;
+	bool     unix_sock_;
+	string   addr_;
 
 #if defined(_WIN32) || defined(_WIN64)
 	SOCKET fd_;

@@ -8,7 +8,6 @@ CFLAGS = -c -g -W \
 -Wno-long-long \
 -Wmissing-prototypes \
 -Wpointer-arith \
--Werror \
 -Wshadow \
 -D_REENTRANT \
 -D_POSIX_PTHREAD_SEMANTICS \
@@ -21,7 +20,7 @@ CFLAGS = -c -g -W \
 ###########################################################
 #Check system:
 #       Linux, SunOS, Solaris, BSD variants, AIX, HP-UX
-SYSLIB = -lpthread -ldl
+SYSLIB = -lpthread
 CHECKSYSRES = @echo "Unknow system type!";exit 1
 UNIXNAME = $(shell uname -sm)
 
@@ -36,12 +35,12 @@ endif
 ifeq ($(findstring clang, $(CC)), clang)
 	CFLAGS += -Wstrict-prototypes \
 		  -Wno-invalid-source-encoding \
-		  -Wno-extended-offsetof
+		  -Wno-invalid-offsetof
 endif
 
 ifeq ($(findstring clang++, $(CC)), clang++)
 	CFLAGS += -Wno-invalid-source-encoding \
-		  -Wno-extended-offsetof
+		  -Wno-invalid-offsetof
 endif
 
 # For FreeBSD
@@ -53,7 +52,7 @@ endif
 # For Darwin
 ifeq ($(findstring Darwin, $(UNIXNAME)), Darwin)
 	CFLAGS += -DMACOSX -Wno-invalid-source-encoding \
-		  -Wno-extended-offsetof
+		  -Wno-invalid-offsetof
 	SYSLIB += -rdynamic
 	UNIXTYPE = MACOSX
 endif
@@ -61,7 +60,7 @@ endif
 #Path for Linux
 ifeq ($(findstring Linux, $(UNIXNAME)), Linux)
 #	CFLAGS += -DLINUX2
-	SYSLIB += -lcrypt -rdynamic
+	SYSLIB += -lcrypt -rdynamic -ldl
 endif
 
 # For MINGW
@@ -110,8 +109,7 @@ FIBER_LIB  = $(FIBER_PATH)/lib
 
 EXTLIBS =
 CFLAGS += -I.. -I$(PRO_INC) -I$(ACL_INC) -I$(FIBER_INC)
-LDFLAGS = -L$(PRO_LIB) -lprotocol -L$(FIBER_LIB) -lfiber \
-	  -L$(ACL_LIB) -lacl $(EXTLIBS) $(SYSLIB)
+LDFLAGS = -L$(PRO_LIB) -lprotocol -L$(ACL_LIB) -lacl -L$(FIBER_LIB) -lfiber $(EXTLIBS) $(SYSLIB)
 
 ###########################################################
 

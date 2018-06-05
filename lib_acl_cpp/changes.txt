@@ -1,6 +1,109 @@
 修改历史列表：
 
+524) 2018.6.4
+524.1) feature: connect_monitor 类增加三个虚方法：on_connected, on_refused,
+on_timeout
+
+523) 2018.5.31
+523.1) sqlite: sqlite 库升级到 3.23.1 版本
+
+522) 2018.5.23
+522.1) bugfix: redis_key::renamenx 返回值类型有误
+
+521) 2018.5.14
+521.1) feature: redis_client_cluster 增加新方法 get_password/get_passwords
+521.2) feature: connect_manager 增加 check_idle 用来检测并释放过期空闲连接
+
 -----------------------------------------------------------------------
+
+520) 2018.5.6
+520.1) bugfix: redis_pubsub.cpp 中，对于同一个连接同时订阅多个频道的情况，如果
+某一频道已经在生产数据时，如果该连接订阅另外频道时则可能会先收到某频道的消息而
+导致新订阅频道的响应数据与消息重叠，而无法判断是订阅响应还是消息响应，从而导致
+出错，现在的策略时，在订阅命令发出过程中如果收到了已订阅频道的消息则忽略该消息
+
+519) 2018.5.4
+519.1) bugfix: 420.1 中引入的特性会导致 redis_pubsub.cpp 模块出现内存非法访问
+问题，主要原因为在 redis_command::run 内部自动调用了清理临时内存过程，但该 run
+方法返回后，在 redis_pubsub.cpp 里又会引用前面分配的临时内存，从而造成内存非法
+使用，所以去掉了 420.1 的新增特性，所以当使用者反复使用一个 redis_xxx 命令时，
+应该自己注意及时调用 clear 方法以清理临时内存，以免引起内存临时性浪费（虽然类
+对象退出时，该临时内存会被释放掉）
+
+-----------------------------------------------------------------------
+518) 2018.4.27
+518.1) feature: 针对 HTTP 请求 uri 中的 "?" 问号被转义成 "%3F" 的情况，可以做兼容性处理
+
+517) 2018.4.19
+517.1) feature: 添加 diff_xxx 类对象集，用来快速对比两个集合的差集
+
+516) 2018.4.12
+516.1) workaroud: thread_cond::wait 当等待超时时不必记录日志信息
+
+515) 2018.4.8
+515.1) bugfix: acl::thread 对象被重复使用时(即线程退出后再次调用 start)，需要
+将 thread_id_ 置 0 --- by 562351190@qq.com
+
+514) 2018.3.22
+514.1) feature: add redis_role class
+
+513) 2018.3.20
+513.1) feature: atomic_long 类增加赋值拷贝重载功能，同时禁止构造拷贝功能
+
+512) 2018.3.19
+512.1) bugfix: thread_cond.cpp 中的方法 wait 内部计算时间有误
+
+511) 2018.3.19
+511.1) feature: add redis_sentinel class
+
+510) 2018.2.22
+510.1) bugfix: serialize/gsoner.cpp 针对 std::map 类型的数据对象不支持 optional
+
+509) 2018.2.13
+509.1) bugfix: server_socket 中的 buf_ 为固定 64 字节大小，对于 UNIX 域套接口
+是不够用的，将其类型改为 acl::string
+
+508) 2018.2.5
+508.1) bugfix: redis_client.cpp 中当连接需要认证时，如果因网络或其它原因可能会造成
+认证死循环状态，通过增加标志位成员(authing_) 以防止循环认证
+
+507) 2018.2.1
+507.1) bugfix: redis_client_cluster::set_all_slot 方法不支持连接认证功能
+
+506) 2018.1.29
+506.1) feature: server_socket 类支持 SO_REUSEPORT
+
+505) 2018.1.9
+505.1) feature: aio_handle 类增加方法 last_nready 用来获得本次事件循环触发的事件数
+
+504) 2018.1.1
+504.1) feature: redis_cluster class can support redis.4.x.x for command:
+"CLUSTER NODES" as show below:
+d52ea3cb4cdf7294ac1fb61c696ae6483377bcfc 127.0.0.1:16385@116385 master - 0 1428410625374 73 connected 5461-10922
+
+503) 2017.12.14
+503.1) compile: 使用 cmake 编译时报错
+
+502) 2017.12.7
+502.1) bugfix: polarssl_conf.cpp 将库的初始化放在构造函数之外，以应对应用不同的
+使用方式
+
+501) 2017.12.5
+501.1) bugfix: redis 模块中有些命令类对于二进制的数据支持存在问题
+
+500) 2017.12.2
+500.1) bugfix: polarssl_conf.cpp 在动态加载 polarssl 库时，如果应用定义了全局
+的 acl::polarssl_conf 对象，则会因 polarssl_conf 类内部的 __polarssl_path 也是
+静态全局的，编译器在构建此两个对象时的顺序是先构造应用的 polarssl_conf 对象而
+后构造 __polarssl_path，从而导致 polarssl_conf 在构造时会引起崩溃
+
+499) 2017.11.14
+499.1) feature: 增加 tbox 类，用于在多线程环境中传递消息对象
+
+498) 2017.11.7
+498.1) bugfix: string.cpp 中在重载 < 和 > 符号时，应取最小长度值进行比较，但
+内部却误写成取最长长度进行比较，容易造成内存非法访问
+
 497) 2017.10.26
 497.1) bugfix: redis_hash.cpp 中当调用 hmset 命令时有一处填写了错误的命令字
 

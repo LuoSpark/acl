@@ -10,11 +10,12 @@ static int __nloop    = 2;
 static int __delay    = 0;
 
 static acl::atomic_long __counter = 0;
+static long long __counter2 = 0;
 
 class myfiber : public acl::fiber
 {
 public:
-	myfiber(acl::fiber_mutex& lock, int& nfibers)
+	myfiber(acl::fiber_event& lock, int& nfibers)
 	: lock_(lock)
 	, nfibers_(nfibers)
 	{
@@ -30,7 +31,7 @@ protected:
 				printf("thread-%lu, fiber-%u begin lock\r\n",
 					acl::thread::thread_self(),
 					acl::fiber::self());
-			assert(lock_.lock());
+			assert(lock_.wait());
 
 			if (__show)
 				printf("thread-%lu, fiber-%u lock ok\r\n",
@@ -45,7 +46,8 @@ protected:
 					acl::thread::thread_self(),
 					acl::fiber::self());
 
-			assert(lock_.unlock());
+			__counter2++;
+			assert(lock_.notify());
 			__counter++;
 
 			if (__show)
@@ -63,7 +65,7 @@ protected:
 	}
 
 private:
-	acl::fiber_mutex& lock_;
+	acl::fiber_event& lock_;
 	int& nfibers_;
 
 	~myfiber(void) {}
@@ -72,14 +74,14 @@ private:
 class mythread : public acl::thread
 {
 public:
-	mythread(acl::fiber_mutex& lock) : lock_(lock)
+	mythread(acl::fiber_event& lock) : lock_(lock)
 	{
 		this->set_detachable(false);
 	}
 	~mythread(void) {}
 
 private:
-	acl::fiber_mutex& lock_;
+	acl::fiber_event& lock_;
 
 	// @override
 	void* run(void)
@@ -105,21 +107,19 @@ static void usage(const char* procname)
 		" -t nthreads[default: 2]\r\n"
 		" -c nfibers[default: 2]\r\n"
 		" -n nloop[default: 2]\r\n"
-		" -d delay[default: 100 ms]\r\n"
-		" -S [show info]\r\n"
-		" -m [use thread_mutex]\r\n"
-		" -s read_wait[default: 100 ms]\r\n", procname);
+		" -d delay[default: 0 ms]\r\n"
+		" -S [show info]\r\n",
+		procname);
 }
 
 int main(int argc, char *argv[])
 {
-	int  ch, read_wait = 100;
-	bool use_thread_mutex = false;
+	int  ch;
 
 	acl::acl_cpp_init();
 	acl::log::stdout_open(true);
 
-	while ((ch = getopt(argc, argv, "hc:t:n:d:s:Sm")) > 0)
+	while ((ch = getopt(argc, argv, "hc:t:n:Sd:")) > 0)
 	{
 		switch (ch)
 		{
@@ -135,25 +135,18 @@ int main(int argc, char *argv[])
 		case 'n':
 			__nloop = atoi(optarg);
 			break;
-		case 'd':
-			__delay = atoi(optarg);
-			break;
-		case 's':
-			read_wait = atoi(optarg);
-			break;
 		case 'S':
 			__show = true;
 			break;
-		case 'm':
-			use_thread_mutex = true;
+		case 'd':
+			__delay = atoi(optarg);
 			break;
 		default:
 			break;
 		}
 	}
 
-	printf("use_thread_mutex: %s\r\n", use_thread_mutex ? "yes" : "no");
-	acl::fiber_mutex lock(true, read_wait, use_thread_mutex ? false : true);
+	acl::fiber_event lock;
 
 	std::vector<acl::thread*> threads;
 	for (int i = 0; i < __nthreads; i++)
@@ -170,7 +163,7 @@ int main(int argc, char *argv[])
 		delete *it;
 	}
 
-	printf("all over, thread=%d, fibers=%d, nloop=%d, counter=%lld\r\n",
-		__nthreads, __nfibers, __nloop, __counter.value());
+	printf("all over, thread=%d, fibers=%d, nloop=%d, counter=%lld, %lld\n",
+		__nthreads, __nfibers, __nloop, __counter.value(), __counter2);
 	return 0;
 }

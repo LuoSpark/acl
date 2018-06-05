@@ -1,3 +1,70 @@
+89) 2018.5.17
+89.1) bugfix: 使用 poll 方法时，在初始化参数时不需要设置 POLLERR, POLLHUP
+
+88) 2018.4.24
+88.1) feature: acl 协程库可以运行在 MacOS 上了
+
+87) 2018.4.17
+87.1) bugfix: 当所有协程还未执行完毕而调用 acl_fiber_stop 时，则需要将缓存的
+协程对象及正在运行的协程对象的内存释放掉
+
+86) 2018.3.5
+86.1) bugfix: acl_fiber_gethostbyname 在协程模式下是不安全的，会存在多个协程
+共用一个线程局部变量的问题，从而导致内存解析失败，解决方式是使用协程局部变量
+
+------------------------------------------------------------------------------
+
+85) 2018.2.6
+85.1) bugfix: 修复了 FreeBSD kqueue 的问题
+
+84) 2018.2.5
+84.1) feature: fiber_server.cpp 支持协程调度时选择不同的事件引擎
+
+83) 2018.2.1
+83.1) feature: 协程事件引擎增加针对 Winsock IOCP 的支持
+
+82) 2018.1.28
+82.1) feature: 增加 API acl_fiber_schedule_init() 可以设置协程调度器为自启动模式
+82.2) feature: 增加 API acl_fiber_schedule_set_event() 可以显式地设置协程事件引擎
+
+81) 2018.1.23
+81.1) bugfix: event_epoll.c 的 函数 epoll_event_wait 中没有处理 EPOLLERR|EPOLLHUP
+的错误情况，会导致程序进入死循环
+
+80) 2018.1.22
+80.1) feature: fiber_io.c 当没有监控网络句柄并且没有定时器任务时，该 IO 协程
+会自动退出
+80.2) bugfix: event_select.c/event_poll.c 当没有网络句柄被监控时，应调用 Sleep，因为
+Windows 下的 select/WSAPoll 不允许输入的句柄为空
+
+79) 2018.1.21
+79.1) bugfix: event_poll.c 中应该处理异常情况（POLLERR | POLLHUP | POLLNVAL）
+
+78) 2018.1.17
+78.1) performance: win32 窗口消息引擎处理性能优化，每次调度循环过程可以尽量多的提取消息，
+从而提升消息处理能力
+
+77) 2018.1.16
+77.1) performance: 针对超时读/写操作时，当调用 poll/select 后再调用读/写，会首先检查
+当前句柄状态，如果可读，则不必再次调用 IO 等待过程
+
+76) 2018.1.14
+76.1) feature: 协程模块可以支持 WIN32 窗口消息引擎，从而可以与界面编程无缝整合
+76.2) feature: acl_fiber_poll/acl_fiber_select 支持 win32 平台
+
+75) 2017.12.28
+75.1) feature: 增加 kqueue 事件引擎以支持 FreeBSD，从而使 acl 协程支持 FreeBSD
+
+74) 2017.12.19
+74.1) bugfix: 解决了 hook poll 时的一个关键性问题
+
+73) 2017.11.23
+73.1) feature: fiber_event.c 新增同时支持协程/线程互斥的锁，性能可达千万级别 QPS
+
+72) 2017.11.2
+72.1) feature: fiber.c, fiber_alloc 中需要增加针对信号的处理过程
+72.2) bugfix: fiber_io.c, fiber_io_loop 中容易产生 32 位整数溢出问题，会导致
+定时器无法触发
 
 71) 2017.10.27
 71.1) bugfix: fiber.c，__thread_fiber->switched 原来为有符号 int 型，有可能会

@@ -40,10 +40,13 @@ typedef struct ACL_MASTER_SERV {
 	int      max_qlen;		/* max listening qlen */
 	int      max_proc;		/* upper bound on # processes */
 	int      prefork_proc;		/* prefork processes */
+	//char    *command;		/* command in configure */
+	char    *cmdext;		/* extname of the command */
 	char    *path;			/* command pathname */
 	char    *conf;			/* service configure filepath */
 	char    *notify_addr;		/* warning address when not null */
 	char    *notify_recipients;	/* users warned to */
+	char    *version;		/* the service's version */
 	int      avail_proc;		/* idle processes */
 	int      total_proc;		/* number of processes */
 	int      throttle_delay;	/* failure recovery parameter */
@@ -55,6 +58,13 @@ typedef struct ACL_MASTER_SERV {
 	ACL_VSTREAM  *status_reader;	/* status stream */
 	ACL_RING      children;		/* linkage of children */
 	struct ACL_MASTER_SERV *next;	/* linkage of serv */
+
+	char check_fds;
+	char check_mem;
+	char check_cpu;
+	char check_io;
+	char check_limits;
+	char check_net;
 
 	STATUS_CALLBACK  callback;
 	void            *ctx;
@@ -130,13 +140,15 @@ extern ACL_MASTER_SERV *acl_master_ent_get(void);
 extern ACL_MASTER_SERV *acl_master_ent_load(const char*);
 extern void acl_master_ent_free(ACL_MASTER_SERV *);
 extern int  acl_master_same_name(ACL_MASTER_SERV *serv, const char *name);
-extern ACL_MASTER_SERV *acl_master_ent_find(const char *name, int type);
+extern ACL_MASTER_SERV *acl_master_ent_find(const char *path);
 
  /*
   * master_conf.c
   */
-extern void acl_master_config(void);
+extern void acl_master_start_services(void);
+extern void acl_master_main_config(void);
 extern void acl_master_refresh(void);
+extern int  acl_master_refresh_service(ACL_MASTER_SERV *entry);
 
  /*
   * master_service.c
@@ -144,7 +156,7 @@ extern void acl_master_refresh(void);
 extern ACL_MASTER_SERV *acl_var_master_head;
 extern ACL_EVENT *acl_var_master_global_event;
 extern void acl_master_service_init(void);
-extern void acl_master_service_start(ACL_MASTER_SERV *);
+extern int  acl_master_service_start(ACL_MASTER_SERV *);
 extern void acl_master_service_kill(ACL_MASTER_SERV *);
 extern void acl_master_service_stop(ACL_MASTER_SERV *serv);
 extern void acl_master_service_restart(ACL_MASTER_SERV *);
@@ -172,7 +184,7 @@ extern void acl_master_wakeup_cleanup(ACL_MASTER_SERV *);
  /*
   * master_listen.c
   */
-extern void acl_master_listen_init(ACL_MASTER_SERV *);
+extern int  acl_master_listen_init(ACL_MASTER_SERV *);
 extern void acl_master_listen_cleanup(ACL_MASTER_SERV *);
 
 /*
@@ -206,7 +218,8 @@ extern void acl_master_sighup_children(ACL_MASTER_SERV *serv, int *nsignaled);
   * master_warning.c
   */
 extern void master_warning(const char *notify_addr, const char *recipients,
-	const char *path, int pid, const char *info);
+	const char *path, const char* conf, const char *ver,
+	int pid, const char *info);
 
 #ifdef  __cplusplus
 }

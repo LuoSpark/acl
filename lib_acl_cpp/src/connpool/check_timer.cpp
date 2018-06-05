@@ -60,8 +60,8 @@ void check_timer::timer_callback(unsigned int id)
 
 	manager.unlock();
 
-	if (addrs_.empty())
-		logger_warn(">>>no addr been set!<<<");
+	//if (addrs_.empty())
+	//	logger_warn(">>>no addr been set!<<<");
 
 	// 连接所有服务器地址
 
@@ -86,6 +86,7 @@ void check_timer::timer_callback(unsigned int id)
 		if (conn == NULL)
 		{
 			logger_warn("connect server: %s error", addr);
+			monitor_.on_refused(addr, 0);
 			manager.set_pools_status(addr, false);
 			addrs_.erase(cit);
 		}

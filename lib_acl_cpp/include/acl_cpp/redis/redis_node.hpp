@@ -236,9 +236,20 @@ public:
 		return addr_.c_str();
 	}
 
+	/**
+	 * result of CLUSTER NODES for redis.4.x.x:
+	 * d52ea3cb4cdf7294ac1fb61c696ae6483377bcfc 127.0.0.1:16385@116385 master - 0 1428410625374 73 connected 5461-10922
+	 * @return return 127.0.0.1:16385@116385 for redis.4.x.x
+	 */
+	const char* get_addr_info() const
+	{
+		return addr_info_.c_str();
+	}
+
 private:
 	string id_;
 	string addr_;
+	string addr_info_;
 	string type_;
 	bool myself_;
 	bool handshaking_;

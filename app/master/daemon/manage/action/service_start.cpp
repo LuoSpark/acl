@@ -17,6 +17,8 @@
 #include "type_defs.h"
 #include "service_start.h"
 
+#define CMD	"start"
+
 service_start::service_start(http_client& client)
 : client_(client)
 , proc_count_(0)
@@ -35,7 +37,7 @@ bool service_start::run(acl::json& json)
 		start_res_t res;
 		res.status = 400;
 		res.msg    = "invalid json";
-		client_.reply<start_res_t>(res.status, res);
+		client_.reply<start_res_t>(res.status, CMD, res);
 
 		delete this;
 		return false;
@@ -65,7 +67,8 @@ bool service_start::handle(const start_req_t& req)
 
 		start_res_data_t data;
 
-		if (start_one((*cit).path.c_str(), data, waiting)) {
+		if (start_one((*cit).path.c_str(), data, waiting, (*cit).ext)) {
+
 			proc_count_    += data.proc_count;
 			proc_signaled_ += data.proc_signaled;
 			servers_[data.path] = data;
@@ -84,7 +87,7 @@ bool service_start::handle(const start_req_t& req)
 }
 
 bool service_start::start_one(const char* path, start_res_data_t& data,
-	bool waiting)
+	bool waiting, const char* ext)
 {
 	data.status        = STATUS_TIMEOUT;
 	data.path          = path;
@@ -96,7 +99,7 @@ bool service_start::start_one(const char* path, start_res_data_t& data,
 	const ACL_MASTER_SERV* serv = acl_master_start(path,
 			&data.proc_count, &data.proc_signaled,
 			waiting ? service_start_callback : NULL,
-			waiting ? this : NULL);
+			waiting ? this : NULL, ext);
 	if (serv == NULL) {
 		data.status = 500;
 		data.proc_err++;
@@ -177,7 +180,7 @@ void service_start::start_finish(void)
 		acl_master_callback_clean(it->first.c_str());
 	}
 
-	client_.reply<start_res_t>(res_.status, res_);
+	client_.reply<start_res_t>(res_.status, CMD, res_);
 	client_.on_finish();
 
 	delete this;

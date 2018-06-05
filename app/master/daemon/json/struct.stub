@@ -45,15 +45,37 @@ struct serv_info_t
 	acl::string notify_addr;
 	// Gson@optional
 	acl::string notify_recipients;
+	// Gson@optional
+	acl::string version;
+	// Gson@optional
 	std::map<acl::string, acl::string> env;
 	// Gson@optional
 	std::list<proc_info_t> procs;
+	// Gson@optional
+	bool check_fds;
+	// Gson@optional
+	bool check_mem;
+	// Gson@optional
+	bool check_cpu;
+	// Gson@optional
+	bool check_io;
+	// Gson@optional
+	bool check_limits;
+	// Gson@optional
+	bool check_net;
 
 	serv_info_t()
 	{
 		status = 0;
 		type   = 0;
 		start  = 0;
+
+		check_fds    = false;
+		check_mem    = false;
+		check_cpu    = false;
+		check_io     = false;
+		check_limits = false;
+		check_net    = false;
 	}
 };
 
@@ -91,6 +113,8 @@ struct stat_res_t : res_t
 struct start_req_data_t
 {
 	acl::string path;
+	// Gson@optional
+	acl::string ext;
 };
 
 struct start_req_t : req_t
@@ -134,6 +158,8 @@ struct start_res_t : res_t
 struct restart_req_data_t
 {
 	acl::string path;
+	// Gson@optional
+	acl::string ext;
 };
 
 struct restart_req_t : req_t
@@ -240,4 +266,15 @@ struct reload_res_data_t
 struct reload_res_t : res_t
 {
 	std::vector<reload_res_data_t> data;
+};
+
+//////////////////////////////////////////////////////////////////////////////
+
+struct master_config_req_t : req_t
+{
+};
+
+struct master_config_res_t : res_t
+{
+	std::map<acl::string, acl::string> data;
 };

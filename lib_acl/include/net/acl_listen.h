@@ -82,15 +82,28 @@ ACL_API ACL_SOCKET acl_inet_accept_ex(ACL_SOCKET listen_fd, char *ipbuf,
  */
 ACL_API ACL_SOCKET acl_inet_bind(const struct addrinfo *res, unsigned flag);
 
+#ifdef ACL_UNIX
+
+/**
+ * 以 UDP 报文方式绑定本地 UNIX 域套接口
+ * @param addr {const char*} UNIX 域套接口地址路径
+ * @param flag {unsigned} 标志位
+ * @return {ACL_SOCKET} 返回域套接口，如果返回 ACL_SOCKET_INVALID 表示失败
+ */
+ACL_API ACL_SOCKET acl_unix_dgram_bind(const char *addr, unsigned flag);
+#endif
+
 /**
  * 绑定指针的 UDP 地址
- * @param addr {const char*} UDP 地址，格式：IP:PORT
+ * @param addr {const char*} UDP 地址，格式：IP:PORT 或 UNIX 域套接口，当为
+ *  UNIX 域套接口时的格式为：{domain_path}@udp，其中 @udp 表示为 UDP 域套接口
+ *  后缀；内部自动区别网络套接口和 UNIX 域套接口，域套接口仅支持 UNIX 平台
  * @param flag {unsigned int} 标志位
  * @return {ACL_SOCKET} 返回 ACL_SOCKET_INVALID 表示绑定失败
  */
 ACL_API ACL_SOCKET acl_udp_bind(const char *addr, unsigned flag);
 
-#ifdef	ACL_UNIX
+#ifdef ACL_UNIX
 
 /* in acl_unix_listen.c */
 /**
@@ -114,6 +127,14 @@ ACL_API ACL_SOCKET acl_unix_accept(ACL_SOCKET fd);
 ACL_API int acl_fifo_listen(const char *path, int permissions, int mode);
 
 #endif
+
+#if defined(_WIN32) || defined(_WIN64)
+typedef SOCKET (WINAPI *acl_accept_fn)(SOCKET, struct sockaddr*, socklen_t*);
+#else
+typedef int (*acl_accept_fn)(int, struct sockaddr*, socklen_t*);
+#endif
+
+ACL_API void acl_set_accept(acl_accept_fn fn);
 
 #ifdef __cplusplus
 }

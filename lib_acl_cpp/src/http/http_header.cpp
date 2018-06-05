@@ -122,18 +122,22 @@ http_header& http_header::set_request_mode(bool onoff)
 	return *this;
 }
 
-http_header& http_header::add_entry(const char* name, const char* value)
+http_header& http_header::add_entry(const char* name, const char* value,
+	bool replace /* = true */)
 {
 	if (name == NULL || *name == 0 || value == NULL || *value == 0)
 		return *this;
 
-	std::list<HTTP_HDR_ENTRY*>::iterator it = entries_.begin();
-	for (; it != entries_.end(); ++it)
+	if (replace)
 	{
-		if (strcasecmp((*it)->name, name) == 0)
+		std::list<HTTP_HDR_ENTRY*>::iterator it = entries_.begin();
+		for (; it != entries_.end(); ++it)
 		{
-			(*it)->value = dbuf_->dbuf_strdup(value);
-			return *this;
+			if (strcasecmp((*it)->name, name) == 0)
+			{
+				(*it)->value = dbuf_->dbuf_strdup(value);
+				return *this;
+			}
 		}
 	}
 
@@ -210,6 +214,11 @@ void http_header::date_format(char* out, size_t size, time_t t)
 bool http_header::is_request() const
 {
 	return is_request_;
+}
+
+void http_header::uri_unsafe_correct(bool on)
+{
+	http_uri_correct(on ? 1 : 0);
 }
 
 void http_header::build_common(string& buf) const

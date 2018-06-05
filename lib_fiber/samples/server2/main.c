@@ -3,19 +3,38 @@
 #include <signal.h>
 #include <errno.h>
 #include <string.h>
+#include <assert.h>
+#if !defined(_WIN32) && !defined(_WIN64)
 #include <unistd.h>
 #include <poll.h>
+#endif
 #include "lib_acl.h"
 #include "fiber/lib_fiber.h"
 
+#if defined(_WIN32) || defined(_WIN64)
+# define POLL	WSAPoll
+# define CLOSE	acl_fiber_close
+# define LISTEN	acl_fiber_listen
+# define ACCEPT	acl_fiber_accept
+# define snprintf _snprintf
+#else
+# define SOCKET	int
+# define INVALID_SOCKET -1
+# define POLL	poll
+# define CLOSE	close
+# define LISTEN	listen
+# define ACCEPT accept
+#endif
+
 static int  __nconnect = 0;
 static int  __count = 0;
+static int  __socket_count = 0;
 static char __listen_ip[64];
 static int  __listen_port = 9001;
 static int  __listen_qlen = 64;
 static int  __rw_timeout = 0;
 static int  __echo_data  = 1;
-static int  __stack_size = 32000;
+static int  __stack_size = 320000;
 
 static int check_read(int fd, int timeout)
 {
@@ -26,9 +45,9 @@ static int check_read(int fd, int timeout)
 	pfd.fd = fd;
 	pfd.events = POLLIN;
 
-	n = poll(&pfd, 1, timeout);
+	n = POLL(&pfd, 1, timeout);
 	if (n < 0) {
-		printf("poll error: %s\r\n", strerror(errno));
+		printf("poll error: %s\r\n", acl_last_serror());
 		return -1;
 	}
 
@@ -42,54 +61,67 @@ static int check_read(int fd, int timeout)
 
 static void echo_client(ACL_FIBER *fiber acl_unused, void *ctx)
 {
-	int  *cfd = (int *) ctx;
+	SOCKET  *pfd = (SOCKET *) ctx;
+	SOCKET   fd  = *pfd;
 	char  buf[8192];
 	int   ret;
 
-	printf("client fiber-%d: fd: %d\r\n", acl_fiber_self(), *cfd);
+	__socket_count++;
+	printf("client fiber-%d: fd: %d\r\n", acl_fiber_self(), fd);
 
 	while (1) {
 		if (__rw_timeout > 0) {
-			ret = check_read(*cfd, __rw_timeout * 1000);
+			ret = check_read(fd, __rw_timeout * 1000);
 			if (ret < 0)
 				break;
 			if (ret == 0) {
-				printf("read timeout fd=%d\r\n", *cfd);
-				continue;
+				printf("read timeout fd=%u\r\n", fd);
+				break;
 			}
 		}
 
-		ret = read(*cfd, buf, sizeof(buf));
+#if defined(_WIN32) || defined(_WIN64)
+		ret = acl_fiber_recv(fd, buf, sizeof(buf) - 1, 0);
+#else
+		ret = read(fd, buf, sizeof(buf) - 1);
+#endif
 		if (ret == 0) {
 			printf("read close by peer fd: %d, %s\r\n",
-				*cfd, strerror(errno));
+				fd, acl_last_serror());
 			break;
 		} else if (ret < 0) {
-			if (errno == EINTR) {
+			if (acl_last_error() == EINTR) {
 				printf("catch a EINTR signal\r\n");
 				continue;
 			}
 
-			printf("read error %s, fd: %d\n", strerror(errno), *cfd);
+			printf("read error %s, fd: %u\n", acl_last_serror(), fd);
 			break;
 		}
 
+		// buf[ret] = 0; printf("buf=%s\r\n", buf);
 		__count++;
 
 		if (!__echo_data)
 			continue;
 
-		if (write(*cfd, buf, ret) < 0) {
+#if defined(_WIN32) || defined(_WIN64)
+		if (acl_fiber_send(fd, buf, ret, 0) < 0) {
+#else
+		if (write(fd, buf, ret) < 0) {
+#endif
 			if (errno == EINTR)
 				continue;
-			printf("write error, fd: %d\r\n", *cfd);
+			printf("write error, fd: %d\r\n", fd);
 			break;
 		}
 	}
 
-	printf("close %d\r\n", *cfd);
-	close(*cfd);
-	free(cfd);
+	__socket_count--;
+	printf("%s: close %d, socket_count=%d\r\n",
+		__FUNCTION__, fd, __socket_count);
+	CLOSE(fd);
+	free(pfd);
 
 	if (--__nconnect == 0) {
 		printf("\r\n----total read/write: %d----\r\n", __count);
@@ -99,7 +131,8 @@ static void echo_client(ACL_FIBER *fiber acl_unused, void *ctx)
 
 static void fiber_accept(ACL_FIBER *fiber acl_unused, void *ctx acl_unused)
 {
-	int  lfd, on = 1;
+	SOCKET lfd;
+	int on = 1;
 	struct sockaddr_in sa;
 
 	memset(&sa, 0, sizeof(sa));
@@ -108,21 +141,25 @@ static void fiber_accept(ACL_FIBER *fiber acl_unused, void *ctx acl_unused)
 	sa.sin_addr.s_addr = inet_addr(__listen_ip);
 
 	lfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (lfd < 0)
+	if (lfd == INVALID_SOCKET)
 		abort();
 
+#if defined(_WIN32) || defined(_WIN64)
+	if (setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, (const char *) &on, sizeof(on))) {
+#else
 	if (setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on))) {
-		printf("setsockopt error %s\r\n", strerror(errno));
+#endif
+		printf("setsockopt error %s\r\n", acl_last_serror());
 		exit (1);
 	}
 
 	if (bind(lfd, (struct sockaddr *) &sa, sizeof(struct sockaddr)) < 0) {
-		printf("bind error %s\r\n", strerror(errno));
+		printf("bind error %s\r\n", acl_last_serror());
 		exit (1);
 	}
 
-	if (listen(lfd, 128) < 0) {
-		printf("listen error %s\r\n", strerror(errno));
+	if (LISTEN(lfd, 128) < 0) {
+		printf("listen error %s\r\n", acl_last_serror());
 		exit (1);
 	}
 
@@ -130,52 +167,62 @@ static void fiber_accept(ACL_FIBER *fiber acl_unused, void *ctx acl_unused)
 		acl_fiber_self(), __listen_ip, __listen_port);
 
 	for (;;) {
-		int len = sizeof(sa), *fd;
-		int cfd = accept(lfd, (struct sockaddr *)& sa, (socklen_t *) &len);
-		if (cfd < 0) {
-			printf("accept error %s\r\n", strerror(errno));
+		int len = sizeof(sa);
+		SOCKET *pfd;
+		SOCKET cfd = ACCEPT(lfd, (struct sockaddr *)& sa, (socklen_t *) &len);
+		if (cfd == INVALID_SOCKET) {
+			printf("accept error %s\r\n", acl_last_serror());
 			break;
 		}
 
-		fd = malloc(sizeof(int));
-		assert(fd != NULL);
-		*fd = cfd;
+		pfd = malloc(sizeof(SOCKET));
+		assert(pfd != NULL);
+		*pfd = cfd;
 
 		__nconnect++;
-		printf("accept one, fd: %d\r\n", cfd);
-		acl_fiber_create(echo_client, fd, __stack_size);
+		printf("accept one, fd: %u, %p\r\n", cfd, pfd);
+		acl_fiber_create(echo_client, pfd, __stack_size);
 	}
 
-	close(lfd);
+	CLOSE(lfd);
 	exit(0);
 }
 
+#define SCHEDULE_AUTO
+
+#ifndef	SCHEDULE_AUTO
 static void fiber_memcheck(ACL_FIBER *fiber acl_unused, void *ctx acl_unused)
 {
 	while (1) {
+#if defined(_WIN32) || defined(_WIN64)
+		acl_fiber_delay(1000);
+#else
 		sleep(1);
+#endif
 		acl_default_meminfo();
 	}
 }
+#endif
 
 static void usage(const char *procname)
 {
 	printf("usage: %s -h [help]\r\n"
-		"  -s listen_ip\r\n"
-		"  -p listen_port\r\n"
-		"  -r rw_timeout\r\n"
-		"  -q listen_queue\r\n"
-		"  -z stack_size\r\n"
-		"  -S [if using single IO, default: no]\r\n", procname);
+		" -e event_mode [kernel|select|poll]\r\n"
+		" -s listen_ip\r\n"
+		" -p listen_port\r\n"
+		" -r rw_timeout\r\n"
+		" -q listen_queue\r\n"
+		" -z stack_size\r\n"
+		" -S [if using single IO, default: no]\r\n", procname);
 }
 
 int main(int argc, char *argv[])
 {
-	int   ch;
+	int   ch, event_mode = FIBER_EVENT_KERNEL;
 
 	snprintf(__listen_ip, sizeof(__listen_ip), "%s", "127.0.0.1");
 
-	while ((ch = getopt(argc, argv, "hs:p:r:q:Sz:")) > 0) {
+	while ((ch = getopt(argc, argv, "hs:p:r:q:Sz:e:")) > 0) {
 		switch (ch) {
 		case 'h':
 			usage(argv[0]);
@@ -198,20 +245,38 @@ int main(int argc, char *argv[])
 		case 'z':
 			__stack_size = atoi(optarg);
 			break;
+		case 'e':
+			if (strcasecmp(optarg, "select") == 0)
+				event_mode = FIBER_EVENT_SELECT;
+			else if (strcasecmp(optarg, "poll") == 0)
+				event_mode = FIBER_EVENT_POLL;
+			break;
 		default:
 			break;
 		}
 	}
 
+#if !defined(_WIN32) && !defined(_WIN64)
 	signal(SIGPIPE, SIG_IGN);
+#endif
+	acl_lib_init();
 	acl_msg_stdout_enable(1);
+	acl_fiber_msg_stdout_enable(1);
 
-	acl_fiber_create(fiber_memcheck, NULL, 64000);
+#ifdef	SCHEDULE_AUTO
+	acl_fiber_schedule_init(1);
+	acl_fiber_schedule_set_event(event_mode);
+#endif
+
 	printf("%s: call fiber_creater\r\n", __FUNCTION__);
-	acl_fiber_create(fiber_accept, NULL, 32768);
+	acl_fiber_create(fiber_accept, NULL, 327680);
+
+#ifndef	SCHEDULE_AUTO
+	acl_fiber_create(fiber_memcheck, NULL, 640000);
 
 	printf("call fiber_schedule\r\n");
-	acl_fiber_schedule();
+	acl_fiber_schedule_with(event_mode);
+#endif
 
 	return 0;
 }

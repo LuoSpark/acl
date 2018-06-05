@@ -400,6 +400,138 @@ namespace acl
     }
 
 
+    acl::json_node& gson(acl::json &$json, const master_config_req_t &$obj)
+    {
+        acl::json_node &$node = $json.create_node();
+
+        if (check_nullptr($obj.cmd))
+            $node.add_null("cmd");
+        else
+            $node.add_text("cmd", acl::get_value($obj.cmd));
+
+
+        return $node;
+    }
+    
+    acl::json_node& gson(acl::json &$json, const master_config_req_t *$obj)
+    {
+        return gson ($json, *$obj);
+    }
+
+
+    acl::string gson(const master_config_req_t &$obj)
+    {
+        acl::json $json;
+        acl::json_node &$node = acl::gson ($json, $obj);
+        return $node.to_string ();
+    }
+
+
+    std::pair<bool,std::string> gson(acl::json_node &$node, master_config_req_t &$obj)
+    {
+        acl::json_node *cmd = $node["cmd"];
+        std::pair<bool, std::string> $result;
+
+        if(!cmd ||!($result = gson(*cmd, &$obj.cmd), $result.first))
+            return std::make_pair(false, "required [master_config_req_t.cmd] failed:{"+$result.second+"}");
+     
+        return std::make_pair(true,"");
+    }
+
+
+    std::pair<bool,std::string> gson(acl::json_node &$node, master_config_req_t *$obj)
+    {
+        return gson($node, *$obj);
+    }
+
+
+     std::pair<bool,std::string> gson(const acl::string &$str, master_config_req_t &$obj)
+    {
+        acl::json _json;
+        _json.update($str.c_str());
+        if (!_json.finish())
+        {
+            return std::make_pair(false, "json not finish error");
+        }
+        return gson(_json.get_root(), $obj);
+    }
+
+
+    acl::json_node& gson(acl::json &$json, const master_config_res_t &$obj)
+    {
+        acl::json_node &$node = $json.create_node();
+
+        if (check_nullptr($obj.status))
+            $node.add_null("status");
+        else
+            $node.add_number("status", acl::get_value($obj.status));
+
+        if (check_nullptr($obj.msg))
+            $node.add_null("msg");
+        else
+            $node.add_text("msg", acl::get_value($obj.msg));
+
+        if (check_nullptr($obj.data))
+            $node.add_null("data");
+        else
+            $node.add_child("data", acl::gson($json, $obj.data));
+
+
+        return $node;
+    }
+    
+    acl::json_node& gson(acl::json &$json, const master_config_res_t *$obj)
+    {
+        return gson ($json, *$obj);
+    }
+
+
+    acl::string gson(const master_config_res_t &$obj)
+    {
+        acl::json $json;
+        acl::json_node &$node = acl::gson ($json, $obj);
+        return $node.to_string ();
+    }
+
+
+    std::pair<bool,std::string> gson(acl::json_node &$node, master_config_res_t &$obj)
+    {
+        acl::json_node *status = $node["status"];
+        acl::json_node *msg = $node["msg"];
+        acl::json_node *data = $node["data"];
+        std::pair<bool, std::string> $result;
+
+        if(!status ||!($result = gson(*status, &$obj.status), $result.first))
+            return std::make_pair(false, "required [master_config_res_t.status] failed:{"+$result.second+"}");
+     
+        if(!msg ||!($result = gson(*msg, &$obj.msg), $result.first))
+            return std::make_pair(false, "required [master_config_res_t.msg] failed:{"+$result.second+"}");
+     
+        if(!data ||!data->get_obj()||!($result = gson(*data->get_obj(), &$obj.data), $result.first))
+            return std::make_pair(false, "required [master_config_res_t.data] failed:{"+$result.second+"}");
+     
+        return std::make_pair(true,"");
+    }
+
+
+    std::pair<bool,std::string> gson(acl::json_node &$node, master_config_res_t *$obj)
+    {
+        return gson($node, *$obj);
+    }
+
+
+     std::pair<bool,std::string> gson(const acl::string &$str, master_config_res_t &$obj)
+    {
+        acl::json _json;
+        _json.update($str.c_str());
+        if (!_json.finish())
+        {
+            return std::make_pair(false, "json not finish error");
+        }
+        return gson(_json.get_root(), $obj);
+    }
+
+
     acl::json_node& gson(acl::json &$json, const proc_info_t &$obj)
     {
         acl::json_node &$node = $json.create_node();
@@ -907,6 +1039,11 @@ namespace acl
         else
             $node.add_text("path", acl::get_value($obj.path));
 
+        if (check_nullptr($obj.ext))
+            $node.add_null("ext");
+        else
+            $node.add_text("ext", acl::get_value($obj.ext));
+
 
         return $node;
     }
@@ -928,10 +1065,14 @@ namespace acl
     std::pair<bool,std::string> gson(acl::json_node &$node, restart_req_data_t &$obj)
     {
         acl::json_node *path = $node["path"];
+        acl::json_node *ext = $node["ext"];
         std::pair<bool, std::string> $result;
 
         if(!path ||!($result = gson(*path, &$obj.path), $result.first))
             return std::make_pair(false, "required [restart_req_data_t.path] failed:{"+$result.second+"}");
+     
+        if(ext)
+            gson(*ext, &$obj.ext);
      
         return std::make_pair(true,"");
     }
@@ -1250,6 +1391,11 @@ namespace acl
         else
             $node.add_text("notify_recipients", acl::get_value($obj.notify_recipients));
 
+        if (check_nullptr($obj.version))
+            $node.add_null("version");
+        else
+            $node.add_text("version", acl::get_value($obj.version));
+
         if (check_nullptr($obj.env))
             $node.add_null("env");
         else
@@ -1259,6 +1405,36 @@ namespace acl
             $node.add_null("procs");
         else
             $node.add_child("procs", acl::gson($json, $obj.procs));
+
+        if (check_nullptr($obj.check_fds))
+            $node.add_null("check_fds");
+        else
+            $node.add_bool("check_fds", acl::get_value($obj.check_fds));
+
+        if (check_nullptr($obj.check_mem))
+            $node.add_null("check_mem");
+        else
+            $node.add_bool("check_mem", acl::get_value($obj.check_mem));
+
+        if (check_nullptr($obj.check_cpu))
+            $node.add_null("check_cpu");
+        else
+            $node.add_bool("check_cpu", acl::get_value($obj.check_cpu));
+
+        if (check_nullptr($obj.check_io))
+            $node.add_null("check_io");
+        else
+            $node.add_bool("check_io", acl::get_value($obj.check_io));
+
+        if (check_nullptr($obj.check_limits))
+            $node.add_null("check_limits");
+        else
+            $node.add_bool("check_limits", acl::get_value($obj.check_limits));
+
+        if (check_nullptr($obj.check_net))
+            $node.add_null("check_net");
+        else
+            $node.add_bool("check_net", acl::get_value($obj.check_net));
 
 
         return $node;
@@ -1295,8 +1471,15 @@ namespace acl
         acl::json_node *listen_fd_count = $node["listen_fd_count"];
         acl::json_node *notify_addr = $node["notify_addr"];
         acl::json_node *notify_recipients = $node["notify_recipients"];
+        acl::json_node *version = $node["version"];
         acl::json_node *env = $node["env"];
         acl::json_node *procs = $node["procs"];
+        acl::json_node *check_fds = $node["check_fds"];
+        acl::json_node *check_mem = $node["check_mem"];
+        acl::json_node *check_cpu = $node["check_cpu"];
+        acl::json_node *check_io = $node["check_io"];
+        acl::json_node *check_limits = $node["check_limits"];
+        acl::json_node *check_net = $node["check_net"];
         std::pair<bool, std::string> $result;
 
         if(!status ||!($result = gson(*status, &$obj.status), $result.first))
@@ -1344,11 +1527,32 @@ namespace acl
         if(notify_recipients)
             gson(*notify_recipients, &$obj.notify_recipients);
      
-        if(!env ||!env->get_obj()||!($result = gson(*env->get_obj(), &$obj.env), $result.first))
-            return std::make_pair(false, "required [serv_info_t.env] failed:{"+$result.second+"}");
+        if(version)
+            gson(*version, &$obj.version);
+     
+        if(env&& env->get_obj())
+             gson(*env->get_obj(), &$obj.env);
      
         if(procs&& procs->get_obj())
              gson(*procs->get_obj(), &$obj.procs);
+     
+        if(check_fds)
+            gson(*check_fds, &$obj.check_fds);
+     
+        if(check_mem)
+            gson(*check_mem, &$obj.check_mem);
+     
+        if(check_cpu)
+            gson(*check_cpu, &$obj.check_cpu);
+     
+        if(check_io)
+            gson(*check_io, &$obj.check_io);
+     
+        if(check_limits)
+            gson(*check_limits, &$obj.check_limits);
+     
+        if(check_net)
+            gson(*check_net, &$obj.check_net);
      
         return std::make_pair(true,"");
     }
@@ -1381,6 +1585,11 @@ namespace acl
         else
             $node.add_text("path", acl::get_value($obj.path));
 
+        if (check_nullptr($obj.ext))
+            $node.add_null("ext");
+        else
+            $node.add_text("ext", acl::get_value($obj.ext));
+
 
         return $node;
     }
@@ -1402,10 +1611,14 @@ namespace acl
     std::pair<bool,std::string> gson(acl::json_node &$node, start_req_data_t &$obj)
     {
         acl::json_node *path = $node["path"];
+        acl::json_node *ext = $node["ext"];
         std::pair<bool, std::string> $result;
 
         if(!path ||!($result = gson(*path, &$obj.path), $result.first))
             return std::make_pair(false, "required [start_req_data_t.path] failed:{"+$result.second+"}");
+     
+        if(ext)
+            gson(*ext, &$obj.ext);
      
         return std::make_pair(true,"");
     }

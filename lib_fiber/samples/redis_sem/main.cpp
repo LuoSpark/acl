@@ -147,7 +147,7 @@ private:
 static int __fibers_count = 2;
 static int __fibers_max   = 2;
 static int __oper_count = 100;
-static struct timeval __begin, __end;
+static struct timeval __tm_begin, __tm_end;
 
 class fiber_redis : public acl::fiber
 {
@@ -177,14 +177,14 @@ protected:
 		__total += oper.nset() + oper.nget() + oper.ndel();
 
 		if (--__fibers_count == 0) {
-			gettimeofday(&__end, NULL);
-			double spent = stamp_sub(&__end, &__begin);
+			gettimeofday(&__tm_end, NULL);
+			double spent = stamp_sub(&__tm_end, &__tm_begin);
 			printf("-------- All fibers over now --------\r\n");
 			printf("fibers: %d, count: %lld, spent: %.2f, speed: %.2f\r\n",
 				__fibers_max, __total, spent,
 				(__total * 1000) / (spent > 0 ? spent : 1));
 
-			acl::fiber::schedule_stop();
+			//acl::fiber::schedule_stop();
 		}
 	}
 
@@ -200,6 +200,7 @@ static void usage(const char *procname)
 		" -n operation_count\r\n"
 		" -c fibers count\r\n"
 		" -p redis_connections\r\n"
+		" -P passwd\r\n"
 		" -t conn_timeout\r\n"
 		" -r rw_timeout\r\n", procname);
 }
@@ -207,9 +208,9 @@ static void usage(const char *procname)
 int main(int argc, char *argv[])
 {
 	int   ch, i, conn_timeout = 2, rw_timeout = 2, redis_connections = 10;
-	acl::string addr("127.0.0.1:6379");
+	acl::string addr("127.0.0.1:6379"), passwd;
 
-	while ((ch = getopt(argc, argv, "hs:n:c:p:r:t:")) > 0) {
+	while ((ch = getopt(argc, argv, "hs:n:c:p:r:t:P:")) > 0) {
 		switch (ch) {
 		case 'h':
 			usage(argv[0]);
@@ -233,23 +234,28 @@ int main(int argc, char *argv[])
 		case 't':
 			conn_timeout = atoi(optarg);
 			break;
+		case 'P':
+			passwd = optarg;
+			break;
 		default:
 			break;
 		}
 	}
 
 	acl::acl_cpp_init();
+	acl_fiber_msg_stdout_enable(1);
 
 	// declare redis cluster
 	acl::redis_client_cluster cluster;
 	cluster.set(addr, 0, conn_timeout, rw_timeout);
+	cluster.set_password("default", passwd);
 
 	// declare fiber sem
 	acl::fiber_sem sem(redis_connections);
 
 	std::vector<fiber_redis*> fibers;
 
-	gettimeofday(&__begin, NULL);
+	gettimeofday(&__tm_begin, NULL);
 
 	for (i = 0; i < __fibers_count; i++)
 	{

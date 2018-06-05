@@ -4,6 +4,7 @@
 #include "acl_cpp/stream/server_socket.hpp"
 #include "acl_cpp/stream/socket_stream.hpp"
 #include "acl_cpp/master/master_base.hpp"
+#include "fiber_server.hpp"
 #include "fiber/master_fiber.hpp"
 
 namespace acl {
@@ -60,8 +61,9 @@ bool master_fiber::run_alone(const char* addrs, const char* path /* = NULL */)
 
 	int  argc = 0;
 	const char *argv[9];
+	const char *file_path = acl_process_path();
 
-	argv[argc++] = acl_process_path();
+	argv[argc++] = file_path ? file_path : "unknown";
 	argv[argc++] = "-L";
 	argv[argc++] = addrs;
 	if (path && *path)

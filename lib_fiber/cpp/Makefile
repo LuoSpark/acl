@@ -9,7 +9,7 @@ RANLIB  = ${ENV_RANLIB}
 FLAGS   = ${ENV_FLAGS}
 
 CFLAGS = -c -g -W \
--O3 \
+-O \
 -fPIC \
 -Wall \
 -Werror \
@@ -26,7 +26,7 @@ CFLAGS = -c -g -W \
 # -Wcast-align
 #-Wcast-qual
 #just for freebsd's iconv.h
-CFLAGS += -I/usr/local/include
+CFLAGS += -I/usr/local/include -I../../lib_acl/src/master
 
 shared_ldflags = -lacl_cpp -lprotocol -lacl -lz -lpthread
 
@@ -52,7 +52,7 @@ endif
 
 ifeq ($(findstring clang++, $(CC)), clang++)
 	CFLAGS += -Wno-invalid-source-encoding \
-		  -Wno-extended-offsetof
+		  -Wno-invalid-offsetof
 endif
 
 ifeq ($(findstring g++, $(CC)), g++)
@@ -118,14 +118,12 @@ endif
 
 OBJ_PATH_DST = ./debug
 LIB_PATH_DST = ../lib
-DEF_PATH_DST = ./debug
 
 CFLAGS += -I./src -I../c/include  -I./include -I../../lib_acl/include -I../../lib_acl_cpp/include
 
 #Project's objs
 
 OBJS_DST = $(patsubst %.cpp, $(OBJ_PATH_DST)/%.o, $(notdir $(wildcard src/*.cpp)))
-OBJS_DEF = $(patsubst %.cpp, $(DEF_PATH_DST)/%.inc, $(notdir $(wildcard src/*.cpp)))
 
 ###########################################################
 .PHONY = static shared clean
@@ -136,15 +134,11 @@ STATIC_LIBNAME = libfiber_cpp.a
 SHARED_LIBNAME = libfiber_cpp.so
 STATIC_OLD_LIBNAME = lib_fiber_cpp.a
 SHARED_OLD_LIBNAME = lib_fiber_cpp.so
-PCH = ./acl_stdafx.hpp.gch
 
 lib: static
 all: static shared sample
 
-$(shell mkdir -p $(DEF_PATH_DST))
-ifneq ($(MAKECMDGOALS),clean)
--include $(OBJS_DEF)
-endif
+$(shell mkdir -p $(OBJ_PATH_DST))
 
 COMPILE = $(CC) $(CFLAGS)
 COMPILE_OBJ = @(echo 'building $<'; $(COMPILE) $< -o $@)
@@ -158,7 +152,7 @@ CREATE_DEF = @(echo 'creating $@'; rm -f $@; \
 sample: static
 	@(cd samples; make)
 
-static: depends $(OBJS_DST)
+static: $(OBJS_DST)
 	@echo 'creating $(LIB_PATH_DST)/$(STATIC_LIBNAME)'
 	@$(AR) $(ARFL) $(LIB_PATH_DST)/$(STATIC_LIBNAME) $(OBJS_DST)
 	@$(RANLIB) $(LIB_PATH_DST)/$(STATIC_LIBNAME)
@@ -166,7 +160,7 @@ static: depends $(OBJS_DST)
 		ln -s ${STATIC_LIBNAME} ${STATIC_OLD_LIBNAME})
 	@echo 'create $(LIB_PATH_DST)/$(STATIC_LIBNAME) ok!'
 
-shared: depends pch $(OBJS_DST)
+shared: $(OBJS_DST)
 	@echo 'creating $(SHARED_LIBNAME)'
 	@if test -n "$(rpath)" && test "$(UNIXTYPE)" = "LINUX"; then \
 		echo "building for linux"; \
@@ -192,28 +186,15 @@ shared: depends pch $(OBJS_DST)
 		echo 'skip build $(SHARED_LIBNAME); usage: make shared rpath=xxx'; \
 	fi
 
-depends: $(OBJS_DEF)
-pch: ./acl_stdafx.hpp
-	rm -f $(PCH)
-	@if test "$(UNIXTYPE)" = "LINUX" || test "$(UNIXTYPE)" = "FREEBSD" \
-		|| test "$(UNIXTYPE)" = "MACOSX"; then \
-		$(CC) -o $(PCH) -x c++-header $(CFLAGS) src/acl_stdafx.hpp; \
-	fi
-
 # src
 $(OBJ_PATH_DST)/%.o: ./src/%.cpp
 	$(COMPILE_OBJ)
 
-$(DEF_PATH_DST)/%.inc: ./src/%.cpp
-	$(CREATE_DEF)
-
-clean:
+clean cl:
 	rm -f $(LIB_PATH_DST)/${STATIC_LIBNAME}
 	rm -f $(LIB_PATH_DST)/${SHARED_LIBNAME}
 	rm -f $(LIB_PATH_DST)/${STATIC_OLD_LIBNAME}
 	rm -f $(LIB_PATH_DST)/${SHARED_OLD_LIBNAME}
 	rm -f $(OBJS_DST)
-	rm -f $(OBJS_DEF)
-	rm -f $(PCH)
 
 rebuild rb: clean static

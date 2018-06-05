@@ -136,6 +136,15 @@
     <ClCompile Include="src\stdlib\dns_service.cpp">
       <Filter>src\stdlib</Filter>
     </ClCompile>
+    <ClCompile Include="src\stdlib\diff_manager.cpp">
+      <Filter>src\stdlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\stdlib\diff_object.cpp">
+      <Filter>src\stdlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\stdlib\diff_string.cpp">
+      <Filter>src\stdlib</Filter>
+    </ClCompile>
     <ClCompile Include="src\stdlib\locker.cpp">
       <Filter>src\stdlib</Filter>
     </ClCompile>
@@ -469,6 +478,12 @@
     <ClCompile Include="src\redis\redis_request.cpp">
       <Filter>src\redis</Filter>
     </ClCompile>
+    <ClCompile Include="src\redis\redis_role.cpp">
+      <Filter>src\redis</Filter>
+    </ClCompile>
+    <ClCompile Include="src\redis\redis_sentinel.cpp">
+      <Filter>src\redis</Filter>
+    </ClCompile>
     <ClCompile Include="src\redis\redis_script.cpp">
       <Filter>src\redis</Filter>
     </ClCompile>
@@ -564,6 +579,12 @@
     </ClCompile>
     <ClCompile Include="src\serialize\gsoner.cpp">
       <Filter>src\serialize</Filter>
+    </ClCompile>
+    <ClCompile Include="src\redis\redis_master.cpp">
+      <Filter>src\redis</Filter>
+    </ClCompile>
+    <ClCompile Include="src\redis\redis_slave.cpp">
+      <Filter>src\redis</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -798,6 +819,15 @@
     <ClInclude Include="include\acl_cpp\stdlib\dns_service.hpp">
       <Filter>include\stdlib</Filter>
     </ClInclude>
+    <ClInclude Include="include\acl_cpp\stdlib\diff_manager.hpp">
+      <Filter>include\stdlib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\acl_cpp\stdlib\diff_object.hpp">
+      <Filter>include\stdlib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\acl_cpp\stdlib\diff_string.hpp">
+      <Filter>include\stdlib</Filter>
+    </ClInclude>
     <ClInclude Include="include\acl_cpp\stdlib\escape.hpp">
       <Filter>include\stdlib</Filter>
     </ClInclude>
@@ -987,9 +1017,6 @@
     <ClInclude Include="include\acl_cpp\stdlib\thread_pool.hpp">
       <Filter>include\stdlib</Filter>
     </ClInclude>
-    <ClInclude Include="include\acl_cpp\stdlib\trigger.hpp">
-      <Filter>include\stdlib</Filter>
-    </ClInclude>
     <ClInclude Include="src\stream\aio_timer_delay_free.hpp">
       <Filter>src\stream</Filter>
     </ClInclude>
@@ -1029,6 +1056,12 @@
     <ClInclude Include="include\acl_cpp\redis\redis_list.hpp">
       <Filter>include\redis</Filter>
     </ClInclude>
+    <ClInclude Include="include\acl_cpp\redis\redis_master.hpp">
+      <Filter>include\redis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\acl_cpp\redis\redis_slave.hpp">
+      <Filter>include\redis</Filter>
+    </ClInclude>
     <ClInclude Include="include\acl_cpp\redis\redis_cluster.hpp">
       <Filter>include\redis</Filter>
     </ClInclude>
@@ -1051,6 +1084,12 @@
       <Filter>include\redis</Filter>
     </ClInclude>
     <ClInclude Include="include\acl_cpp\redis\redis_pubsub.hpp">
+      <Filter>include\redis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\acl_cpp\redis\redis_role.hpp">
+      <Filter>include\redis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\acl_cpp\redis\redis_sentinel.hpp">
       <Filter>include\redis</Filter>
     </ClInclude>
     <ClInclude Include="include\acl_cpp\redis\redis_script.hpp">

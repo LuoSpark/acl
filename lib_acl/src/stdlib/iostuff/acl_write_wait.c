@@ -23,7 +23,20 @@
 #include "stdlib/acl_iostuff.h"
 #include "../../init/init.h"
 
-#ifdef ACL_UNIX
+#if defined(ACL_HAS_POLL)
+
+# if defined(ACL_WINDOWS)
+static acl_poll_fn __sys_poll = WSAPoll;
+# else
+static acl_poll_fn __sys_poll = poll;
+# endif
+
+extern void set_poll4write(acl_poll_fn fn);
+
+void set_poll4write(acl_poll_fn fn)
+{
+	__sys_poll = fn;
+}
 
 int acl_write_wait(ACL_SOCKET fd, int timeout)
 {
@@ -31,16 +44,17 @@ int acl_write_wait(ACL_SOCKET fd, int timeout)
 	struct pollfd fds;
 	int   delay = timeout * 1000;
 
-	fds.events = POLLOUT | POLLHUP | POLLERR;
+	fds.events = POLLOUT;
+	fds.revents = 0;
 	fds.fd = fd;
 
-#if 0
-	acl_set_error(0);
-#endif
-
 	for (;;) {
-		switch (poll(&fds, 1, delay)) {
+		switch (__sys_poll(&fds, 1, delay)) {
+#ifdef ACL_WINDOWS
+		case SOCKET_ERROR:
+#else
 		case -1:
+#endif
 			if (acl_last_error() == ACL_EINTR)
 				continue;
 			acl_msg_error("%s(%d), %s: poll error(%s), fd: %d",
@@ -49,25 +63,30 @@ int acl_write_wait(ACL_SOCKET fd, int timeout)
 			return -1;
 		case 0:
 			acl_set_error(ACL_ETIMEDOUT);
+			acl_msg_error("%s(%d), %s: poll return 0",
+				__FILE__, __LINE__, myname);
 			return -1;
 		default:
-			if ((fds.revents & (POLLHUP | POLLERR))) {
-				/*
-				acl_msg_error("%s(%d), %s: fd: %d,"
-					"POLLHUP: %s, POLLERR: %s",
-					__FILE__, __LINE__, myname, fd,
-					fds.revents & POLLHUP ? "yes" : "no",
-					fds.revents & POLLERR ? "yes" : "no");
-				*/
-				errno = ECONNREFUSED;
+			if (fds.revents & POLLOUT) {
+				return 0;
+			}
+
+			if (!(fds.revents & (POLLHUP | POLLERR | POLLNVAL))) {
+				acl_msg_error("%s(%d), %s: error: %s, fd: %d",
+					__FILE__, __LINE__, myname,
+					acl_last_serror(), fd);
 				return -1;
 			}
-			if (fds.revents & POLLOUT)
-				return 0;
-			acl_msg_error("%s(%d), %s: poll error: %s, fd: %d",
+
+#ifdef ACL_UNIX
+			acl_msg_warn("%s(%d), %s: %s, revents=%d, %d, %d, %d",
 				__FILE__, __LINE__, myname,
-				acl_last_serror(), fd);
-			return -1;
+				acl_last_serror(), fds.revents,
+				fds.revents & POLLHUP,
+				fds.revents& POLLERR,
+				fds.revents& POLLNVAL);
+#endif
+			return 0;
 		}
 	}
 }
@@ -109,10 +128,6 @@ int acl_write_wait(ACL_SOCKET fd, int timeout)
 		tp = &tv;
 	} else
 		tp = 0;
-
-#if 0
-	acl_set_error(0);
-#endif
 
 	for (;;) {
 #ifdef ACL_WINDOWS

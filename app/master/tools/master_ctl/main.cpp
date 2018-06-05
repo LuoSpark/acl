@@ -1,10 +1,16 @@
 #include "stdafx.h"
+
+#ifdef	HAS_READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
+#endif
+
 #include "http_request.h"
 
-static bool __verbose = false;
-static long long __timeout = 0;
+static bool        __verbose = false;
+static long long   __timeout = 0;
+static acl::string __server_addr;
+static acl::string __extname;
 
 static void print_space(int n)
 {
@@ -15,7 +21,11 @@ static void print_space(int n)
 
 static void print_name(const char* name, int tabs = 1)
 {
+#ifdef	HAS_READLINE
 	printf("\033[1;33;40m%-s\033[0m", name);
+#else
+	printf("%-s", name);
+#endif
 
 	for (int i = 0; i < tabs; i++)
 		printf("\t");
@@ -23,7 +33,11 @@ static void print_name(const char* name, int tabs = 1)
 
 static void print_value(const char* value, int tabs = 1)
 {
+#ifdef	HAS_READLINE
 	printf("\033[1;36;40m%-s\033[0m", value);
+#else
+	printf("%-s", value);
+#endif
 
 	for (int i = 0; i < tabs; i++)
 		printf("\t");
@@ -60,14 +74,26 @@ static void print_server(const serv_info_t& server)
 
 static void println_underline(const char* name, const char* value)
 {
+#ifdef	HAS_READLINE
 	printf("\033[4m\033[1;36;40m%c\033[0m\033[0m", *name);
+#else
+	printf("%c", *name);
+#endif
 	name++;
+#ifdef	HAS_READLINE
 	printf("\033[1;33;40m%-18s\033[0m: %s\r\n", name, value);
+#else
+	printf("%-18s: %s\r\n", name, value);
+#endif
 }
 
 static void println(const char* name, const char* value)
 {
+#ifdef	HAS_READLINE
 	printf("\033[1;33;40m%-18s\033[0m: %s\r\n", name, value);
+#else
+	printf("%-18s: %s\r\n", name, value);
+#endif
 }
 
 static void println(const char* name, int value)
@@ -102,6 +128,7 @@ static void println_server(const serv_info_t& server)
 	println("listen_fd_count", server.listen_fd_count);
 	println("notify_addr", server.notify_addr.c_str());
 	println("notify_recipients", server.notify_recipients.c_str());
+	println("version", server.version.c_str());
 
 	acl::string buf;
 	size_t i = 0;
@@ -215,6 +242,9 @@ static bool do_start(const std::vector<acl::string>&,
 
 	start_req_data_t req_data;
 	req_data.path = fpath;
+	if (!__extname.empty())
+		req_data.ext = __extname.c_str();
+
 	req.data.push_back(req_data);
 
 	start_res_t res;
@@ -255,6 +285,9 @@ static bool do_restart(const std::vector<acl::string>&,
 
 	restart_req_data_t req_data;
 	req_data.path = fpath;
+	if (!__extname.empty())
+		req_data.ext = __extname.c_str();
+
 	req.data.push_back(req_data);
 
 	restart_res_t res;
@@ -366,8 +399,12 @@ static bool do_reload(const std::vector<acl::string>& tokens,
 {
 	if (*fpath == 0)
 	{
+#ifdef	HAS_READLINE
 		printf("\033[1;34;40musage\033[0m: "
 			"\033[1;33;40mreload\033[0m configure_path timeout\r\n");
+#else
+		printf("usage: reload configure_path timeout\r\n");
+#endif
 		return false;
 	}
 
@@ -390,13 +427,39 @@ static bool do_reload(const std::vector<acl::string>& tokens,
 	return true;
 }
 
+static bool do_master_config(const std::vector<acl::string>&,
+	const char* addr, const char*)
+{
+	master_config_req_t req;
+	req.cmd = "master_config";
+
+	master_config_res_t res;
+	if (!http_request<master_config_req_t, master_config_res_t>
+		(addr, req, res)) {
+
+		return false;
+	}
+
+	for (std::map<acl::string, acl::string>::const_iterator cit =
+		res.data.begin(); cit != res.data.end(); ++cit) {
+
+		println(cit->first.c_str(), cit->second.c_str());
+	}
+
+	return true;
+}
+
 static bool do_set(const std::vector<acl::string>& tokens,
 	const char*, const char* fpath)
 {
 	if (*fpath == 0)
 	{
+#ifdef	HAS_READLINE
 		printf("\033[1;34;40musage\033[0m: "
 			"\033[1;33;40mset\033[0m configure_path timeout\r\n");
+#else
+		printf("usage: set configure_path timeout\r\n");
+#endif
 		return true;
 	}
 
@@ -413,11 +476,19 @@ static bool do_server(const std::vector<acl::string>& tokens,
 	if (tokens.size() > 1)
 	{
 		addr = tokens[1].c_str();
-		printf("set server to %s ok\r\n", addr);
+		__server_addr = addr;
+		const char* ptr = strchr(addr, ':');
+		if (ptr == NULL || *++ptr == 0 || atoi(ptr) <= 0)
+			__server_addr += ":8290";
+		printf("set server to %s ok\r\n", __server_addr.c_str());
 	}
 	else if (*addr == 0)
+#ifdef	HAS_READLINE
 		printf("\033[1;34;40musage\033[0m: "
 			"\033[1;33;40mserver\033[0m addr\r\n");
+#else
+		printf("usage: server addr\r\n");
+#endif
 	else
 		printf("server addr is %s\r\n", addr);
 	return true;
@@ -429,8 +500,12 @@ static bool do_timeout(const std::vector<acl::string>& tokens,
 	if (tokens.size() >= 2)
 		__timeout = atoll(tokens[1]);
 	else
+#ifdef	HAS_READLINE
 		printf("\033[1;34;40musage\033[0m: "
 			"\033[1;33;40mtimeout\033[0m timeout\r\n");
+#else
+		printf("usage: timeout timeout\r\n");
+#endif
 	return true;
 }
 
@@ -455,6 +530,7 @@ static bool do_help(const std::vector<acl::string>&, const char*, const char*)
 	println("stop", "stop one service");
 	println("kill", "kill one service");
 	println("reload", "reload one service");
+	println("master_config", "get master's configure entries");
 	println_underline("timeout", "show one service's running status");
 
 	return true;
@@ -472,7 +548,9 @@ static bool do_quit(const std::vector<acl::string>&, const char*, const char*)
 static bool do_clear(const std::vector<acl::string>&, const char*, const char*)
 {
 #if	!defined(__APPLE__)
+#ifdef	HAS_READLINE
 	rl_clear_screen(0, 0);
+#endif
 #endif
 	printf("\r\n");
 	return true;
@@ -480,17 +558,27 @@ static bool do_clear(const std::vector<acl::string>&, const char*, const char*)
 
 static void getline(acl::string& out)
 {
+#ifdef	HAS_READLINE
 	const char* prompt = "\033[1;34;40mmaster_ctl>\033[0m ";
 	char* ptr = readline(prompt);
-	if (ptr == NULL)
+#else
+	printf("master_ctl> ");
+	fflush(stdout);
+	char buf[1024];
+	char* ptr = fgets(buf, (int) sizeof(buf), stdin);
+#endif
+	if (ptr == NULL || *ptr == 0)
 	{
 		printf("Bye!\r\n");
 		exit(0);
 	}
 	out = ptr;
 	out.trim_right_line();
+
+#ifdef	HAS_READLINE
 	if (!out.empty() && !out.equal("y", false) && !out.equal("n", false))
 		add_history(out.c_str());
+#endif
 }
 
 static struct {
@@ -499,30 +587,32 @@ static struct {
 	bool  has_path;
 	bool (*fn)(const std::vector<acl::string>&, const char*, const char*);
 } __actions[] = {
-	{ "list",	'l',	false,	do_list		},
-	{ "stat",	's',	true,	do_stat		},
-	{ "start",	'\0',	true,	do_start	},
-	{ "restart",	'\0',	true,	do_restart	},
-	{ "stop",	'\0',	true,	do_stop		},
-	{ "kill",	'\0',	true,	do_kill		},
-	{ "reload",	'r',	true,	do_reload	},
+	{ "list",		'l',	false,	do_list			},
+	{ "stat",		's',	true,	do_stat			},
+	{ "start",		'\0',	true,	do_start		},
+	{ "restart",		'\0',	true,	do_restart		},
+	{ "stop",		'\0',	true,	do_stop			},
+	{ "kill",		'\0',	true,	do_kill			},
+	{ "reload",		'r',	true,	do_reload		},
+	{ "master_config",	'\0',	false,	do_master_config	},
 
-	{ "help",	'h',	false,	do_help		},
-	{ "clear",	'c',	false,	do_clear	},
-	{ "quit",	'q',	false,	do_quit		},
-	{ "exit",	'e',	false,	do_quit		},
-	{ "set",	'\0',	true,	do_set		},
-	{ "server",	'\0',	false,	do_server	},
-	{ "timeout",	't',	false,	do_timeout	},
-	{ "verbose",	'v',	false,	do_verbose	},
+	{ "help",		'h',	false,	do_help			},
+	{ "clear",		'c',	false,	do_clear		},
+	{ "quit",		'q',	false,	do_quit			},
+	{ "exit",		'e',	false,	do_quit			},
+	{ "set",		'\0',	true,	do_set			},
+	{ "server",		'\0',	false,	do_server		},
+	{ "timeout",		't',	false,	do_timeout		},
+	{ "verbose",		'v',	false,	do_verbose		},
 
-	{ 0,		0,	false,	0		},
+	{ 0,			0,	false,	0			},
 };
 
 static void run(const char* server, const char* filepath)
 {
-	acl::string buf, fpath, addr(server);
+	acl::string buf, fpath;
 
+	__server_addr = server;
 	printf("server addr is %s\r\n", server);
 
 	if (filepath && *filepath)
@@ -553,28 +643,34 @@ static void run(const char* server, const char* filepath)
 
 		if (__actions[i].cmd == NULL)
 		{
-			do_help(tokens, addr, fpath);
+			do_help(tokens, __server_addr, fpath);
 			continue;
 		}
 
 		if (__actions[i].has_path && tokens.size() >= 2)
 			fpath = tokens[1];
 
-		ret = __actions[i].fn(tokens, addr, fpath);
+		ret = __actions[i].fn(tokens, __server_addr, fpath);
 		if (!__verbose)
 			print_space(100);
 
+#ifdef	HAS_READLINE
 		printf("\033[1;36;40m%s\033[0m ==> \033[1;32;40m%s\033[0m\r\n",
 			__actions[i].cmd, ret ? "ok" : "err");
+#else
+		printf("%s ==> %s\r\n", __actions[i].cmd, ret ? "ok" : "err");
+#endif
 	}
 }
 
 static void usage(const char* procname)
 {
 	printf("usage: %s -h[help]\r\n"
-		" -s master_manage_addr[default: 127.0.0.1:8190]\r\n"
+		" -s master_manage_addr[default: 127.0.0.1:8290]\r\n"
 		" -f servicde_path\r\n"
-		" -a cmd[list|stat|start|stop|reload]\r\n",
+		" -t timeout[waiting the result from master, default: 0]\r\n"
+		" -a cmd[list|stat|start|stop|reload|restart]\r\n"
+		" -e extname[specified the extname of service's path, just for start and restart]\r\n",
 		procname);
 }
 
@@ -583,7 +679,7 @@ int main(int argc, char* argv[])
 	acl::string filepath, action, addr("127.0.0.1:8290");
 	int  ch;
 
-	while ((ch = getopt(argc, argv, "hs:f:a:")) > 0)
+	while ((ch = getopt(argc, argv, "hs:f:a:t:e:")) > 0)
 	{
 		switch (ch)
 		{
@@ -598,6 +694,14 @@ int main(int argc, char* argv[])
 			break;
 		case 'a':
 			action = optarg;
+			break;
+		case 't':
+			__timeout = atoi(optarg);
+			if (__timeout < 0)
+				__timeout = 0;
+			break;
+		case 'e':
+			__extname = optarg;
 			break;
 		default:
 			usage(argv[0]);

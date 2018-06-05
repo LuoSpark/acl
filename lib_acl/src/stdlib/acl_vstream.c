@@ -326,6 +326,7 @@ AGAIN:
 	} else if (in->errnum == ACL_ETIMEDOUT) {
 		in->flag |= ACL_VSTREAM_FLAG_TIMEOUT;
 		SAFE_COPY(in->errbuf, "read timeout");
+		acl_set_error(ACL_ETIMEDOUT);
 	}
 #if ACL_EWOULDBLOCK == ACL_EAGAIN
 	else if (in->errnum != ACL_EWOULDBLOCK)
@@ -2193,7 +2194,9 @@ ACL_VSTREAM *acl_vstream_fdopen(ACL_SOCKET fd, unsigned int oflags,
 	if (fd == ACL_SOCKET_INVALID)
 		return fp;
 
-	if ((ret = acl_check_socket(fd)) == 1) {
+	if (fdtype & ACL_VSTREAM_TYPE_FILE) {
+		/* nothing */
+	} else if ((ret = acl_check_socket(fd)) == 1) {
 		ret = acl_getsocktype(fd);
 #ifdef ACL_INET6
 		if (ret == AF_INET || ret == AF_INET6)
@@ -2989,20 +2992,26 @@ int acl_vstream_close(ACL_VSTREAM *fp)
 
 static struct sockaddr *set_sock_addr(const char *addr, size_t *sa_size)
 {
-	char buf[256], *ptr;
+	char buf[1024], *ptr;
 	int port;
 
 	snprintf(buf, sizeof(buf), "%s", (addr));
+
 	ptr = strchr(buf, ':');
-	if (ptr == NULL) {
-		*sa_size = 0;
-		return NULL;
+	if (ptr == NULL)
+		port = -1;
+	else {
+		*ptr++ = 0;
+		port   = atoi(ptr);
 	}
 
-	*ptr++ = 0;
-	port = atoi(ptr);
 	if (acl_is_ipv4(buf)) {
-		struct sockaddr_in *in = (struct sockaddr_in *)
+		struct sockaddr_in *in;
+		if (port < 0) {
+			*sa_size = 0;
+			return NULL;
+		}
+		in = (struct sockaddr_in *)
 			acl_mycalloc(1, sizeof(struct sockaddr_in));
 		in->sin_family = AF_INET;
 		in->sin_port = htons(port);
@@ -3013,7 +3022,12 @@ static struct sockaddr *set_sock_addr(const char *addr, size_t *sa_size)
 	}
 #ifdef AF_INET6
 	else if (acl_is_ipv6(buf)) {
-		struct sockaddr_in6 *in = (struct sockaddr_in6 *)
+		struct sockaddr_in6 *in;
+		if (port < 0) {
+			*sa_size = 0;
+			return NULL;
+		}
+		in = (struct sockaddr_in6 *)
 			acl_mycalloc(1, sizeof(struct sockaddr_in6));
 		in->sin6_family = AF_INET6;
 		in->sin6_port = htons(port);
@@ -3022,10 +3036,36 @@ static struct sockaddr *set_sock_addr(const char *addr, size_t *sa_size)
 		return (struct sockaddr *) in;
 	}
 #endif
-	else {
-		*sa_size = 0;
-		return NULL;
+
+#ifdef ACL_UNIX
+#define UDP_SUFFIX	"@udp"
+
+	if (acl_strrncasecmp(buf, UDP_SUFFIX, sizeof(UDP_SUFFIX) - 1) == 0) {
+		struct sockaddr_un *un;
+		char *at = strrchr(buf, '@');
+		int   len;
+
+		*at = 0;
+		len = (int) strlen(buf);
+		if (len == 0) {
+			*sa_size = 0;
+			return NULL;
+		}
+
+		un = (struct sockaddr_un *)
+			acl_mycalloc(1, sizeof(struct sockaddr_un));
+		un->sun_family = AF_UNIX;
+#ifdef HAS_SUN_LEN
+		un->sun_len    = len + 1;
+#endif
+		memcpy(un->sun_path, buf, len + 1);
+		*sa_size = sizeof(struct sockaddr_un);
+		return (struct sockaddr *) un;
 	}
+#endif
+
+	*sa_size = 0;
+	return NULL;
 }
 
 void acl_vstream_set_local(ACL_VSTREAM *fp, const char *addr)

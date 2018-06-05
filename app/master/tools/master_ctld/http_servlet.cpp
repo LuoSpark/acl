@@ -1,5 +1,7 @@
 #include "stdafx.h"
+#include "daemon/version.h"
 #include "action/action.h"
+#include "master_ctld_version.h"
 #include "http_servlet.h"
 
 http_servlet::http_servlet(acl::socket_stream* stream, acl::session* session,
@@ -76,7 +78,15 @@ bool http_servlet::doOther(acl::HttpServletRequest&,
 bool http_servlet::doGet(acl::HttpServletRequest& req,
 	acl::HttpServletResponse& res)
 {
-	return doPost(req, res);
+	res.setContentType("text/plain")
+		.setKeepAlive(req.isKeepAlive());
+
+	acl::string body;
+	body.format("%s version: %s; %s %s %s\r\n",
+		MASTER_NAME, MASTER_VERSION,
+		MASTER_CTLD_CMD, MASTER_CTLD_VERSION, MASTER_CTLD_DATE);
+
+	return reply(req, res, 200, body);
 }
 
 bool http_servlet::doPost(acl::HttpServletRequest& req,

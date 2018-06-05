@@ -136,7 +136,7 @@ ACL_IFCONF *acl_get_ifaddrs()
 	if (j == 0) {
 		acl_myfree(ifconf->addrs);
 		acl_myfree(ifconf);
-		return (NULL);
+		return NULL;
 	}
 
 	ifconf->length = j;  /* reset the ifconf->length */
@@ -148,7 +148,7 @@ ACL_IFCONF *acl_get_ifaddrs()
 	ifconf->iter_prev = ifaddrs_iter_prev;
 
 	acl_myfree(ifaces);
-	return (ifconf);
+	return ifconf;
 }
 
 #elif defined(ACL_WINDOWS)
@@ -340,80 +340,134 @@ void acl_free_ifaddrs(ACL_IFCONF *ifconf)
 	acl_myfree(ifconf);
 }
 
-static unsigned match(const ACL_ARGV *tokens, const char *ip)
-{
-	ACL_ARGV *tokens_addr = acl_argv_split(ip, ".");
-	ACL_ITER iter;
-	int   i = 0;
+#define MAX	1024
 
-	if (tokens_addr->argc != 4) {
-		acl_msg_warn("%s(%d), %s: invalid ip: %s",
-			__FILE__, __LINE__, __FUNCTION__, ip);
-		acl_argv_free(tokens_addr);
+static int match_wildcard(const char *pattern, ACL_ARGV *addrs)
+{
+	const char any[]    = "0.0.0.0:";
+	const char domain[] = "@unix";
+	const char udp[]    = "@udp";
+	char       addr[MAX];
+	ACL_ARGV  *tokens;
+
+#define PREFIX_EQ(x, y) !acl_strncasecmp((x), (y), strlen(y))
+	if (PREFIX_EQ(pattern, any)) {
+		acl_argv_add(addrs, pattern, NULL);
+		return 1;
+	}
+
+#define SUFFIX_EQ(x, y) !acl_strrncasecmp((x), (y), strlen((y)))
+	/* for unix domain socket path */
+	if (SUFFIX_EQ(pattern, udp) || SUFFIX_EQ(pattern, domain)) {
+		acl_argv_add(addrs, pattern, NULL);
+		return 1;
+	}
+
+	/* for "port" */
+	if (acl_alldig(pattern)) {
+		snprintf(addr, sizeof(addr), "0.0.0.0:%s", pattern);
+		acl_argv_add(addrs, addr, NULL);
+		return 1;
+	}
+
+	/* for ":port" */
+	if (*pattern == ':' && acl_alldig(++pattern)) {
+		snprintf(addr, sizeof(addr), "0.0.0.0:%s", pattern);
+		acl_argv_add(addrs, addr, NULL);
+		return 1;
+	}
+
+	/* for unix domain socket path */
+	tokens = acl_argv_split(pattern, ".");
+	if (tokens->argc != 4) {
+		acl_argv_add(addrs, pattern, NULL);
+		acl_argv_free(tokens);
+		return 1;
+	}
+
+	acl_argv_free(tokens);
+	return 0;
+}
+
+static int match_ipv4(const char *pattern, const char *ip)
+{
+	/* format: xxx.xxx.xxx.* or xxx.xxx.*.* or xxx.*.*.* */
+	ACL_ARGV *pattern_tokens;
+	ACL_ARGV *ip_tokens;
+	ACL_ITER  iter;
+	int       i = 0;
+
+	pattern_tokens = acl_argv_split(pattern, ".");
+	ip_tokens      = acl_argv_split(ip, ".");
+
+	if (pattern_tokens->argc != 4) {
+		acl_msg_warn("%s(%d), %s: invalid pattern: %s",
+			__FILE__, __LINE__, __FUNCTION__, pattern);
+		acl_argv_free(pattern_tokens);
+		acl_argv_free(ip_tokens);
+
 		return 0;
 	}
 
-	acl_foreach(iter, tokens_addr) {
-		const char* ptr = (const char *) iter.data;
-		const char* arg = tokens->argv[i];
+	if (ip_tokens->argc != 4) {
+		acl_msg_warn("%s(%d), %s: invalid ip: %s",
+			__FILE__, __LINE__, __FUNCTION__, ip);
+		acl_argv_free(pattern_tokens);
+		acl_argv_free(ip_tokens);
+		return 0;
+	}
+
+	acl_foreach(iter, ip_tokens) {
+		const char *ptr = (const char *) iter.data;
+		const char *arg = pattern_tokens->argv[i];
 		if (strcmp(arg, "*") != 0 && strcmp(arg, ptr) != 0) {
-			acl_argv_free(tokens_addr);
+			acl_argv_free(pattern_tokens);
+			acl_argv_free(ip_tokens);
 			return 0;
 		}
 		i++;
 	}
 
-	acl_argv_free(tokens_addr);
+	acl_argv_free(pattern_tokens);
+	acl_argv_free(ip_tokens);
 	return 1;
 }
 
-static unsigned search(ACL_IFCONF *ifconf, const char *addr, ACL_ARGV *addrs)
+static void match_addrs_add(const char *pattern, ACL_IFCONF *ifconf,
+	ACL_ARGV *addrs)
 {
-	ACL_ARGV *tokens = NULL;
-	char      buf[256], *colon;
-	int       port;
-	ACL_ITER  iter;
-	unsigned  naddr = 0;
-
-	/* xxx.xxx.xxx.xxx:port, xxx.xxx.xxx.*:port ...*/
-	snprintf(buf, sizeof(buf), "%s", addr);
-	colon = strchr(buf, ':');
-	if (colon) {
-		*colon++ = 0;
-		port = atoi(colon);
-	} else
-		port = -1;
-
-	/* format: xxx.xxx.xxx.*, xxx.xxx.*.*, xxx.*.*.* */
-	tokens = acl_argv_split(buf, ".");
-	if (tokens->argc != 4) {
-		acl_argv_free(tokens);
-		return 0;
-	}
+	ACL_ITER iter;
 
 	acl_foreach(iter, ifconf) {
-		const ACL_IFADDR* ifaddr = (const ACL_IFADDR *) iter.data;
+		ACL_IFADDR *ifaddr =  (ACL_IFADDR*) iter.data;
+		const char *ip = (const char *) ifaddr->ip;
+		char tmp[MAX], *colon, addr[MAX];
+		int  port;
 
-		if (!match(tokens, ifaddr->ip))
+		/* xxx.xxx.xxx.xxx:port or xxx.xxx.xxx.*:port ...*/
+		snprintf(tmp, sizeof(tmp), "%s", pattern);
+		colon = strchr(tmp, ':');
+		if (colon) {
+			*colon++ = 0;
+			port = atoi(colon);
+		} else
+			port = -1;
+
+		if (!match_ipv4(tmp, ip))
 			continue;
 
-		if (port >= 0) {
-			snprintf(buf, sizeof(buf), "%s:%d", ifaddr->ip, port);
-			acl_argv_add(addrs, buf, NULL);
-		} else
-			acl_argv_add(addrs, ifaddr->ip, NULL);
-
-		naddr++;
+		if (port >= 0)
+			snprintf(addr, sizeof(addr), "%s:%d", ip, port);
+		else
+			snprintf(addr, sizeof(addr), "%s", ip);
+		acl_argv_add(addrs, addr, NULL);
 	}
-
-	acl_argv_free(tokens);
-	return naddr;
 }
 
-ACL_ARGV *acl_ifconf_search(const char *pattern)
+ACL_ARGV *acl_ifconf_search(const char *patterns)
 {
 	ACL_IFCONF *ifconf = acl_get_ifaddrs();
-	ACL_ARGV *tokens, *addrs;
+	ACL_ARGV *patterns_tokens, *addrs;
 	ACL_ITER  iter;
 
 	if (ifconf == NULL) {
@@ -424,18 +478,15 @@ ACL_ARGV *acl_ifconf_search(const char *pattern)
 
 	addrs = acl_argv_alloc(1);
 
-	tokens = acl_argv_split(pattern, "\"',; \t\r\n");
-	acl_foreach(iter, tokens) {
-		const char *addr = (char *) iter.data;
-		if (acl_ipv4_addr_valid(addr) || acl_alldig(addr)
-			|| (*addr == ':' && acl_alldig(addr + 1))) {
+	patterns_tokens = acl_argv_split(patterns, "\"',; \t\r\n");
+	acl_foreach(iter, patterns_tokens) {
+		const char *pattern = (const char *) iter.data;
 
-			acl_argv_add(addrs, addr, NULL);
-		} else if (search(ifconf, addr, addrs) == 0)
-			acl_argv_add(addrs, addr, NULL);
+		if (match_wildcard(pattern, addrs) == 0)
+			match_addrs_add(pattern, ifconf, addrs);
 	}
 
-	acl_argv_free(tokens);
+	acl_argv_free(patterns_tokens);
 	acl_free_ifaddrs(ifconf);
 
 	return addrs;

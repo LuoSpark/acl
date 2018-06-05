@@ -46,6 +46,14 @@ extern char *acl_var_master_daemon_dir;
 #define	ACL_DEF_MASTER_SERVICE_DIR		"/opt/acl/conf/service"
 extern char *acl_var_master_service_dir;
 
+#define ACL_VAR_MASTER_FILE_EXTS		"file_exts"
+#define ACL_DEF_MASTER_FILE_EXTS		"cf, conf"
+extern char *acl_var_master_file_exts;
+
+#define ACL_VAR_MASTER_SERVICE_FILE		"service_file"
+#define ACL_DEF_MASTER_SERVICE_FILE		"/opt/acl/conf/services.cf"
+extern char *acl_var_master_service_file;
+
 #define	ACL_VAR_MASTER_QUEUE_DIR		"queue_directory"
 #define	ACL_DEF_MASTER_QUEUE_DIR		"/opt/acl/var"
 extern char *acl_var_master_queue_dir;
@@ -124,6 +132,7 @@ extern int   acl_var_master_start_timeo;
 #define	ACL_VAR_MASTER_SERV_WAKEUP		"master_wakeup"
 #define	ACL_VAR_MASTER_SERV_LOG			"master_log"
 #define	ACL_VAR_MASTER_SERV_COMMAND		"master_command"
+#define ACL_VAR_MASTER_SERV_CMDEXT		"master_cmdext"
 #define	ACL_VAR_MASTER_SERV_ARGS		"master_args"
 #define	ACL_VAR_MASTER_SERV_OWNER		"master_owner"
 #define	ACL_VAR_MASTER_SERV_ENV			"master_env"
@@ -147,6 +156,14 @@ extern int   acl_var_master_start_timeo;
 #define ACL_VAR_MASTER_SERV_NBLOCK		"master_nonblock"
 #define ACL_VAR_MASETR_SERV_STOP_KILL		"master_stop_kill"
 #define ACL_VAR_MASTER_SERV_STOP_WAIT		"master_stop_wait"
+
+#define ACL_VAR_MASTER_SERV_VERSION		"master_version"
+#define ACL_VAR_MASTER_SERV_CHECK_FDS		"master_check_fds"
+#define ACL_VAR_MASTER_SERV_CHECK_MEM		"master_check_mem"
+#define ACL_VAR_MASTER_SERV_CHECK_CPU		"master_check_cpu"
+#define ACL_VAR_MASTER_SERV_CHECK_IO		"master_check_io"
+#define ACL_VAR_MASTER_SERV_CHECK_LIMITS	"master_check_limits"
+#define ACL_VAR_MASTER_SERV_CHECK_NET		"master_check_net"
 
 /**
  * master_params.c

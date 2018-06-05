@@ -8,7 +8,14 @@ service master_ctld {
 #	for master_type = unix
 #	master_service = echo.sock
 #	for master_type = sock
-	master_service = 8290
+#	master_service = 127.0.0.1:8290, 192.168.*.*:8290, 10.*.*.*:8290, \
+#			172.16.*.*:8290, 172.17.*.*:8290, 172.18.*.*:8290, \
+#			172.19.*.*:8290, 172.20.*.*:8290, 172.21.*.*:8290, \
+#			172.22.*.*:8290, 172.23.*.*:8290, 172.24.*.*:8290, \
+#			172.25.*.*:8290, 172.26.*.*:8290, 172.27.*.*:8290, \
+#			172.28.*.*:8290, 172.29.*.*:8290, 172.30.*.*:8290, \
+#			172.31.*.*:8290
+	master_service = 127.0.0.1:8290, master_ctld.sock
 
 #	服务监听为域套接口
 #	master_service = aio_echo.sock
@@ -16,11 +23,16 @@ service master_ctld {
 #	master_type = inet
 #	master_type = unix
 	master_type = sock
+	master_check_fds = true
+	master_check_mem = true
+	master_check_cpu = true
+	master_check_io  = true
+	master_check_limit = true
 
 #	当子进程异常退出时，如果该值非空，则将子进程异常退出的消息通知该服务
-#	master_notify_addr = 127.0.0.1:5801
+	master_notify_addr = {install_path}/var/public/monitor.sock
 #	邮件通知接收者
-#	master_notify_recipients = zhengshuxin@hotmail.com
+	master_notify_recipients = zhengshuxin@hotmail.com
 
 #	是否允许延迟接受客户端连接，如果为0则表示关闭该功能，如果大于0则表示打开此功能
 #	并且此值代表延迟接受连接的超时值，超过此值时如果客户端依然没有发来数据，则操作
@@ -40,6 +52,7 @@ service master_ctld {
 	master_prefork = 1
 #	进程程序名
 	master_command = master_ctld
+	master_version = 1.0.0-0
 #	进程日志记录文件
 	master_log = {install_path}/var/log/master_ctld
 #	调试日志方式，格式：tag:level; tag:level; tab:level, 如：all:1; 101:2

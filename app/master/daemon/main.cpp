@@ -12,31 +12,80 @@
 #include <fcntl.h>
 #include <limits.h>
 
+#include "version.h"
 #include "master/master_params.h"
 #include "master/master.h"
 #include "manage/manager.h"
 
-const char *var_master_version = "version1.0";
 char *var_master_procname;
+
+#define STR	acl_vstring_str
+#define LEN	ACL_VSTRING_LEN
+
+static void lock_service(void)
+{
+	ACL_VSTRING *buf = acl_vstring_alloc(128);
+	ACL_VSTRING *tmp = acl_vstring_alloc(128);
+	ACL_VSTREAM *fp;
+
+	/* create lock file make sure acl_master can only start once */
+	acl_vstring_sprintf(buf, "%s/.master.lock", acl_var_master_queue_dir);
+	fp = acl_open_lock(STR(buf), O_RDWR | O_CREAT, 0644, tmp);
+	if (fp == NULL) {
+		acl_msg_fatal("%s(%d): open lock file %s: %s", __FUNCTION__,
+			__LINE__, STR(buf), STR(tmp));
+	}
+
+	acl_vstring_sprintf(buf, "%lu\n", (long) time(NULL));
+	acl_vstream_writen(fp, STR(buf), LEN(buf));
+
+	acl_close_on_exec(ACL_VSTREAM_FILE(fp), ACL_CLOSE_ON_EXEC);
+	acl_vstring_free(buf);
+	acl_vstring_free(tmp);
+}
+
+static void lock_pidfile(void)
+{
+	ACL_VSTREAM *fp;
+	ACL_VSTRING *buf;
+
+	/* open pid file, lock it and write the master's pid value into it */
+
+	buf = acl_vstring_alloc(10);
+
+	fp = acl_open_lock(acl_var_master_pid_file, O_RDWR | O_CREAT, 0644, buf);
+	if (fp == NULL) {
+		acl_msg_fatal("%s(%d): open lock file %s: %s", __FUNCTION__,
+			__LINE__, acl_var_master_pid_file, STR(buf));
+	}
+	acl_vstring_sprintf(buf, "%*lu\n", (int) sizeof(unsigned long) * 4,
+		(unsigned long) acl_var_master_pid);
+	acl_vstream_writen(fp, STR(buf), LEN(buf));
+	acl_close_on_exec(ACL_VSTREAM_FILE(fp), ACL_CLOSE_ON_EXEC);
+
+	acl_vstring_free(buf);
+}
 
 /* usage - show hint and terminate */
 
 static void usage(const char *me)
 {
-	acl_msg_fatal("usage: %s [-c root_dir] [-l log_file] [-e exit_time]"
-		" [-D (debug)] [-t (test)] [-v] [-k (keep_mask)]", me);
+	printf("usage: %s -c root_dir\r\n"
+		" -l log_file\r\n"
+		" -v [version]\r\n"
+		" -V [verbose]\r\n"
+		" -h [help]\r\n"
+		" -k (keep_mask)\r\n", me);
 }
 
 /* main - main program */
 
 int     main(int argc, char **argv)
 {
-	ACL_VSTREAM  *lock_fp;
-	int           ch, fd, n, keep_mask = 0;
 	//ACL_WATCHDOG *watchdog;
-	ACL_VSTRING  *strbuf;
-	ACL_AIO      *aio;
-	char         *ptr;
+	int ch, fd, n, keep_mask = 0;
+	ACL_AIO *aio;
+	char *ptr;
 
 	/*
 	 * Strip and save the process name for diagnostics etc.
@@ -46,12 +95,20 @@ int     main(int argc, char **argv)
 
 	acl_var_master_conf_dir = NULL;
 	acl_var_master_log_file = NULL;
+	acl_open_limit(0);
 
-	while ((ch = getopt(argc, argv, "vc:l:k")) > 0) {
+	while ((ch = getopt(argc, argv, "Vhvc:l:k")) > 0) {
 		switch (ch) {
-		case 'v':
+		case 'V':
 			acl_msg_verbose++;
 			break;
+		case 'v':
+			printf("%s %s %s(acl-%s)\r\n", MASTER_NAME,
+				MASTER_VERSION, MASTER_DATE, acl_version());
+			return 0;
+		case 'h':
+			usage(argv[0]);
+			return 0;
 		case 'c':
 			acl_var_master_conf_dir = acl_mystrdup(optarg);
 			break;
@@ -63,6 +120,7 @@ int     main(int argc, char **argv)
 			break;
 		default:
 			usage(argv[0]);
+			return 0;
 			/* NOTREACHED */
 		}
 	}
@@ -126,6 +184,9 @@ int     main(int argc, char **argv)
 			acl_msg_fatal("open /dev/null: %s", acl_last_serror());
 	}
 
+	if (setsid() == -1 && getsid(0) != getpid())
+		acl_msg_fatal("unable to set session %s", acl_last_serror());
+
 	/*
 	 * Make some room for plumbing with file descriptors. XXX This breaks
 	 * when a service listens on many ports. In order to do this right we
@@ -143,11 +204,17 @@ int     main(int argc, char **argv)
 			acl_msg_info("dup(0), fd = %d", fd);
 	}
 
+	/* load main.cf of acl_master */
+	acl_master_main_config();
+
+	/* For the unique master service be started, first to lock file */
+	lock_service();
+
 	/* just for prefork service -- zsx, 2012.3.24 */
 	acl_master_flow_init();
 
-	/* load configure and start all services processes */
-	acl_master_config();
+	/* start all services processes */
+	acl_master_start_services();
 
 	/* init master manager module */
 	manager::get_instance().init(acl_var_master_global_event,
@@ -161,25 +228,11 @@ int     main(int argc, char **argv)
 	 */
 	acl_master_sigsetup();
 
-	/* open pid file, lock it and write the master's pid value into it */
-
-	strbuf = acl_vstring_alloc(10);
-
-	lock_fp = acl_open_lock(acl_var_master_pid_file, O_RDWR | O_CREAT,
-			0644, strbuf);
-	if (lock_fp == NULL)
-		acl_msg_fatal("%s(%d): open lock file %s: %s", __FILE__,
-			__LINE__, acl_var_master_pid_file,
-			acl_vstring_str(strbuf));
-	acl_vstring_sprintf(strbuf, "%*lu\n", (int) sizeof(unsigned long) * 4,
-		(unsigned long) acl_var_master_pid);
-	acl_vstream_writen(lock_fp, acl_vstring_str(strbuf),
-		ACL_VSTRING_LEN(strbuf));
-	acl_close_on_exec(ACL_VSTREAM_FILE(lock_fp), ACL_CLOSE_ON_EXEC);
-	acl_vstring_free(strbuf);
+	/* Save pid to local file and lock it */
+	lock_pidfile();
 
 	acl_msg_info("daemon started -- version %s, configuration %s",
-		var_master_version, acl_var_master_conf_dir);
+		MASTER_VERSION, acl_var_master_conf_dir);
 
 	/*
 	 * Process events. The event handler will execute the read/write/timer

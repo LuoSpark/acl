@@ -22,8 +22,10 @@ static void sleep_main(ACL_FIBER *fiber, void *ctx)
 
 	acl_myfree(n);
 
-	if (--__fibers_count == 0)
-		acl_fiber_schedule_stop();
+	if (--__fibers_count == 0) {
+		printf("All are over!\r\n");
+		//acl_fiber_schedule_stop();
+	}
 }
 
 static void usage(const char *procname)
@@ -48,12 +50,14 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	acl_fiber_msg_stdout_enable(1);
+
 	printf("fibers: %d\r\n", __fibers_count);
 
 	for (i = 1; i <= __fibers_count; i++) {
 		int *n = (int *) acl_mymalloc(sizeof(int));
 		*n = i;
-		acl_fiber_create(sleep_main, n, 32768);
+		acl_fiber_create(sleep_main, n, 327680);
 	}
 
 	acl_fiber_schedule();

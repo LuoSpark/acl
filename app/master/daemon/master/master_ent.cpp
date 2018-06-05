@@ -9,9 +9,9 @@
 #define STR		acl_vstring_str
 #define	STR_SAME	!strcasecmp
 
-static char *__services_path = NULL;	/* dir name of config files */
-static ACL_SCAN_DIR *__scan = NULL;
-
+static char *__services_path  = NULL;	/* dir name of config files */
+static ACL_SCAN_DIR *__scan   = NULL;
+static ACL_ARGV     *__exts   = NULL;
 const char *__config_file_ptr = NULL;
 
 static const char __master_blanks[] = " \t\r\n";  /* field delimiters */
@@ -26,6 +26,8 @@ void acl_set_master_service_path(const char *path)
 void acl_master_ent_begin()
 {
 	const char *myname = "acl_master_ent_begin";
+	ACL_ARGV   *tokens;
+	ACL_ITER    iter;
 
 	if (__services_path == NULL)
 		acl_msg_fatal("%s(%d), %s: master_path is null",
@@ -39,6 +41,19 @@ void acl_master_ent_begin()
 		acl_msg_fatal("%s(%d), %s: open dir(%s) err, serr=%s",
 			__FILE__, __LINE__, myname,
 			__services_path, strerror(errno));
+
+	if (__exts)
+		acl_argv_free(__exts);
+	__exts = acl_argv_alloc(10);
+
+	tokens = acl_argv_split(acl_var_master_file_exts, ",;\t ");
+	acl_foreach(iter, tokens) {
+		const char *ptr = (const char *) iter.data;
+		if (*ptr == '.')
+			ptr++;
+		if (*ptr != 0)
+			acl_argv_add(__exts, ptr, NULL);
+	}
 }
 
 void acl_master_ent_end()
@@ -252,153 +267,97 @@ static int service_unix(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
 	return 0;
 }
 
+static ACL_MASTER_ADDR *master_stream_addr(const char *addr, char private_val)
+{
+	if (strchr(addr, ':') != NULL || acl_alldig(addr)) {
+		ACL_MASTER_ADDR *ma = (ACL_MASTER_ADDR*)
+			acl_mycalloc(1, sizeof(ACL_MASTER_ADDR));
+		ma->type = ACL_MASTER_SERV_TYPE_INET;
+		ma->addr = acl_mystrdup(addr);
+		return ma;
+	}
+
+	char *buf = acl_mystrdup(addr);
+	char *at  = strcasestr(buf, "@unix");
+	if (at == NULL)
+		acl_msg_warn("%s: @unix should after %s", __FUNCTION__, addr);
+
+	if (*buf == 0) {
+		acl_msg_warn("%s: skip invalid addr=%s", __FUNCTION__, addr);
+		acl_myfree(buf);
+		return NULL;
+	}
+
+	ACL_MASTER_ADDR *ma = (ACL_MASTER_ADDR*)
+		acl_mycalloc(1, sizeof(ACL_MASTER_ADDR));
+
+	ma->type = ACL_MASTER_SERV_TYPE_UNIX;
+	ma->addr = acl_master_pathname(acl_var_master_queue_dir,
+			private_val ? ACL_MASTER_CLASS_PRIVATE :
+				ACL_MASTER_CLASS_PUBLIC, buf);
+	acl_myfree(buf);
+	return ma;
+}
+
+static ACL_MASTER_ADDR *master_dgram_addr(const char *addr)
+{
+	if (strchr(addr, ':') != NULL || acl_alldig(addr)) {
+		ACL_MASTER_ADDR *ma = (ACL_MASTER_ADDR*)
+			acl_mycalloc(1, sizeof(ACL_MASTER_ADDR));
+		ma->type = ACL_MASTER_SERV_TYPE_INET;
+		ma->addr = acl_mystrdup(addr);
+		return ma;
+	}
+
+	if (strcasestr(addr, "@udp") == NULL)
+		acl_msg_warn("%s: @udp should after %s", __FUNCTION__, addr);
+
+	ACL_MASTER_ADDR *ma = (ACL_MASTER_ADDR*)
+		acl_mycalloc(1, sizeof(ACL_MASTER_ADDR));
+
+	ma->type = ACL_MASTER_SERV_TYPE_UNIX;
+	ma->addr = acl_master_pathname(acl_var_master_queue_dir,
+			ACL_MASTER_CLASS_PUBLIC, addr);
+	return ma;
+}
+
+
 /* Inet/Unix socket service */
-
-static unsigned addr_matched(const ACL_ARGV *tokens, const char *ip)
-{
-	ACL_ARGV *tokens_addr = acl_argv_split(ip, ".");
-	ACL_ITER iter;
-	int   i = 0;
-
-	if (tokens_addr->argc != 4) {
-		acl_msg_warn("%s(%d), %s: invalid ip: %s",
-			__FILE__, __LINE__, __FUNCTION__, ip);
-		acl_argv_free(tokens_addr);
-		return 0;
-	}
-
-	acl_foreach(iter, tokens_addr) {
-		const char* ptr = (const char *) iter.data;
-		const char* arg = tokens->argv[i];
-		if (strcmp(arg, "*") != 0 && strcmp(arg, ptr) != 0) {
-			acl_argv_free(tokens_addr);
-			return 0;
-		}
-		i++;
-	}
-
-	acl_argv_free(tokens_addr);
-	return 1;
-}
-
-static unsigned service_inet_expand(ACL_MASTER_SERV *serv, const char *path)
-{
-	ACL_ARGV *tokens = NULL;
-	ACL_IFCONF *ifconf = NULL;
-	char  buf[256], *colon;
-	int   port;
-	ACL_ITER iter;
-	unsigned naddr = 0;
-
-#define RETURN(x) do {                     \
-	if (tokens != NULL)                \
-		acl_argv_free(tokens);     \
-	if (ifconf != NULL)                \
-		acl_free_ifaddrs(ifconf);  \
-	return (x);                        \
-} while (0)
-
-	/* xxx.xxx.xxx.xxx:port, xxx.xxx.xxx.*:port ...*/
-	snprintf(buf, sizeof(buf), "%s", path);
-	colon = strchr(buf, ':');
-	if (colon == NULL || colon == buf || *(colon + 1) == 0)
-		RETURN(0);
-	*colon++ = 0;
-	port = atoi(colon);
-	if (port < 0) {
-		acl_msg_warn("%s(%d), %s: invalid port: %d, path: %s",
-			__FILE__, __LINE__, __FUNCTION__, port, path);
-		RETURN(0);
-	}
-
-	/* format: xxx.xxx.xxx.*, xxx.xxx.*.*, xxx.*.*.* */
-	tokens = acl_argv_split(buf, ".");
-	if (tokens->argc != 4)
-		RETURN(0);
-
-	ifconf = acl_get_ifaddrs();
-	if (ifconf == NULL) {
-		acl_msg_error("%s(%d), %s: acl_get_ifaddrs error %s",
-			__FILE__, __LINE__, __FUNCTION__, acl_last_serror());
-		RETURN(0);
-	}
-
-	acl_foreach(iter, ifconf) {
-		const ACL_IFADDR* ifaddr = (const ACL_IFADDR *) iter.data;
-
-		if (addr_matched(tokens, ifaddr->ip)) {
-			ACL_MASTER_ADDR *addr = (ACL_MASTER_ADDR*)
-				acl_mycalloc(1, sizeof(ACL_MASTER_ADDR));
-
-			snprintf(buf, sizeof(buf), "%s:%d", ifaddr->ip, port);
-			addr->type = ACL_MASTER_SERV_TYPE_INET;
-			addr->addr = acl_mystrdup(buf);
-			acl_array_append(serv->addrs, addr);
-			serv->listen_fd_count++;
-			naddr++;
-			acl_msg_info("%s(%d), %s: add addr=%s", __FILE__,
-				__LINE__, __FUNCTION__, buf);
-		}
-	}
-
-	return naddr;
-}
 
 static int service_sock(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
 {
-	/*
-	 * Service name. Syntax is transport-specific.
-	 */
+	/* Service name. Syntax is transport-specific. */
 	const char *name = get_str_ent(xcp, ACL_VAR_MASTER_SERV_SERVICE, NULL);
 	char private_val = get_bool_ent(xcp, ACL_VAR_MASTER_SERV_PRIVATE, "y");
-	ACL_ARGV *tokens;
-	ACL_ITER iter;
+	ACL_ARGV *addrs;
+	ACL_ITER  iter;
 
 	if (name == NULL || *name == 0) {
-		acl_msg_error("no %s found", ACL_VAR_MASTER_SERV_SERVICE);
+		acl_msg_error("%s(%d), %s: no %s found", __FILE__, __LINE__,
+			__FUNCTION__, ACL_VAR_MASTER_SERV_SERVICE);
 		return -1;
 	}
 
-	tokens      = acl_argv_split(name, ",; \t\r\n");
+	addrs       = acl_ifconf_search(name);
 	serv->name  = acl_mystrdup(name);
 	serv->type  = ACL_MASTER_SERV_TYPE_SOCK;
 	serv->addrs = acl_array_create(1);
 
-	acl_foreach(iter, tokens) {
-		const char *path = (const char*) iter.data;
+	acl_foreach(iter, addrs) {
+		const char *ptr = (const char*) iter.data;
+		ACL_MASTER_ADDR *addr = master_stream_addr(ptr, private_val);
+		if (addr == NULL)
+			continue;
 
-		if (acl_ipv4_addr_valid(path) || acl_alldig(path)
-			|| (*path == ':' && acl_alldig(path + 1))) {
-
-			ACL_MASTER_ADDR *addr = (ACL_MASTER_ADDR*)
-				acl_mycalloc(1, sizeof(ACL_MASTER_ADDR));
-
-			addr->type = ACL_MASTER_SERV_TYPE_INET;
-			addr->addr = acl_mystrdup(path);
-			acl_array_append(serv->addrs, addr);
-			serv->listen_fd_count++;
-			acl_msg_info("%s(%d), %s: add addr=%s", __FILE__,
-				__LINE__, __FUNCTION__, path);
-		} else if (service_inet_expand(serv, path) == 0) {
-			ACL_MASTER_ADDR *addr = (ACL_MASTER_ADDR*)
-				acl_mycalloc(1, sizeof(ACL_MASTER_ADDR));
-
-			addr->type = ACL_MASTER_SERV_TYPE_UNIX;
-			addr->addr = acl_master_pathname(
-				acl_var_master_queue_dir,
-				private_val ? ACL_MASTER_CLASS_PRIVATE :
-					ACL_MASTER_CLASS_PUBLIC, path);
-			acl_array_append(serv->addrs, addr);
-			serv->listen_fd_count++;
-			acl_msg_info("%s(%d), %s: add addr=%s", __FILE__,
-				__LINE__, __FUNCTION__, path);
-		}
+		acl_array_append(serv->addrs, addr);
+		serv->listen_fd_count++;
+		acl_msg_info("%s(%d), %s: add addr=%s", __FILE__,
+			__LINE__, __FUNCTION__, ptr);
 	}
 
-	acl_argv_free(tokens);
-
+	acl_argv_free(addrs);
 	if (serv->listen_fd_count == 0) {
-		acl_msg_error("no invalid addr found in %s", name);
+		acl_msg_warn("no invalid addr found in %s", name);
 		return -1;
 	}
 
@@ -410,48 +369,37 @@ static int service_sock(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
 static int service_udp(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
 {
 	const char *name = get_str_ent(xcp, ACL_VAR_MASTER_SERV_SERVICE, NULL);
-	ACL_ARGV *tokens;
-	ACL_ITER iter;
+	ACL_ARGV *addrs;
+	ACL_ITER  iter;
 
 	if (name == NULL || *name == 0) {
-		acl_msg_error("no %s found", ACL_VAR_MASTER_SERV_SERVICE);
+		acl_msg_error("%s(%d), %s: no %s found", __FILE__, __LINE__,
+			__FUNCTION__, ACL_VAR_MASTER_SERV_SERVICE);
 		return -1;
 	}
 
-	tokens      = acl_argv_split(name, ",; \t");
+	addrs       = acl_ifconf_search(name);
+	serv->name  = acl_mystrdup(name);
 	serv->type  = ACL_MASTER_SERV_TYPE_UDP;
 	serv->addrs = acl_array_create(1);
-	serv->name  = acl_mystrdup(name);
 
-	acl_foreach(iter, tokens) {
+	acl_foreach(iter, addrs) {
 		const char *ptr = (const char*) iter.data;
+		ACL_MASTER_ADDR *addr = master_dgram_addr(ptr);
+		if (addr == NULL)
+			continue;
 
-		if (acl_ipv4_addr_valid(ptr) || acl_alldig(ptr)
-			|| (*ptr == ':' && acl_alldig(ptr + 1))) {
-
-			ACL_MASTER_ADDR *addr = (ACL_MASTER_ADDR*)
-				acl_mycalloc(1, sizeof(ACL_MASTER_ADDR));
-
-			addr->type = ACL_MASTER_SERV_TYPE_UDP;
-			addr->addr = acl_mystrdup(ptr);
-
-			acl_array_append(serv->addrs, addr);
-			serv->listen_fd_count++;
-		} else if (service_inet_expand(serv, ptr) == 0) {
-			ACL_MASTER_ADDR *addr = (ACL_MASTER_ADDR*)
-				acl_mycalloc(1, sizeof(ACL_MASTER_ADDR));
-
-			addr->type = ACL_MASTER_SERV_TYPE_UNIX;
-			addr->addr = acl_master_pathname(
-				acl_var_master_queue_dir,
-				ACL_MASTER_CLASS_PUBLIC, ptr);
-			acl_array_append(serv->addrs, addr);
-			serv->listen_fd_count++;
-			acl_msg_info("%s(%d), %s: add addr=%s", __FILE__,
-				__LINE__, __FUNCTION__, ptr);
-		}
+		acl_array_append(serv->addrs, addr);
+		serv->listen_fd_count++;
+		acl_msg_info("%s(%d), %s: add addr=%s", __FILE__,
+			__LINE__, __FUNCTION__, addr->addr);
 	}
 
+	acl_argv_free(addrs);
+	if (serv->listen_fd_count == 0) {
+		acl_msg_warn("no invalid addr found in %s", name);
+		return -1;
+	}
 	return 0;
 }
 
@@ -503,6 +451,7 @@ static int service_transport(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
 static void service_control(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
 {
 	const char* ptr = get_str_ent(xcp, ACL_VAR_MASETR_SERV_STOP_KILL, "off");
+
 	if (EQ(ptr, "on") || EQ(ptr, "true") || atoi(ptr) > 1)
 		serv->flags |= ACL_MASTER_FLAG_STOP_KILL;
 	else
@@ -513,6 +462,19 @@ static void service_control(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
 		serv->flags |= ACL_MASTER_FLAG_STOP_WAIT;
 	else
 		serv->flags &= ~ACL_MASTER_FLAG_STOP_WAIT;
+}
+
+static void service_check(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
+{
+	const char *ptr = get_str_ent(xcp, ACL_VAR_MASTER_SERV_VERSION, "none");
+
+	serv->version = acl_mystrdup(ptr);
+	serv->check_fds = get_bool_ent(xcp, ACL_VAR_MASTER_SERV_CHECK_FDS, "n");
+	serv->check_mem = get_bool_ent(xcp, ACL_VAR_MASTER_SERV_CHECK_MEM, "n");
+	serv->check_io  = get_bool_ent(xcp, ACL_VAR_MASTER_SERV_CHECK_IO, "n");
+	serv->check_cpu = get_bool_ent(xcp, ACL_VAR_MASTER_SERV_CHECK_CPU, "n");
+	serv->check_limits = get_bool_ent(xcp, ACL_VAR_MASTER_SERV_CHECK_LIMITS, "n");
+	serv->check_net = get_bool_ent(xcp, ACL_VAR_MASTER_SERV_CHECK_NET, "n");
 }
 
 static void service_wakeup_time(ACL_XINETD_CFG_PARSER *xcp,
@@ -566,21 +528,28 @@ static void service_proc(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
 	if (serv->max_proc > 0 && serv->prefork_proc > serv->max_proc)
 		serv->prefork_proc = serv->max_proc;
 
-	/*
-	 * Idle and total process count.
-	 */
+	/* Idle and total process count. */
 	serv->avail_proc = 0;
 	serv->total_proc = 0;
 }
+
+#define MONITOR_SOCK	"/opt/soft/acl-master/var/public/monitor.sock"
 
 static int service_args(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv,
 	const char *path)
 {
 	const char *myname = "service_args";
-	const char *command, *name, *transport, *args, *ptr_const;
-	char   *args_buf, *ptr, *cp;
+	const char *command, *transport, *args, *ptr_const;
+	char *args_buf, *ptr, *cp;
 	char  unprivileged, chroot_var; 
 	ACL_VSTRING *junk = acl_vstring_alloc(100);
+
+	/*
+	if (serv->max_proc == 1)
+		acl_argv_add(serv->args, "-l", (char *) 0);
+	if (serv->max_proc == 0)
+		acl_argv_add(serv->args, "-z", (char *) 0);
+	*/
 
 	/*
 	 * Privilege level. Default is to restrict process privileges
@@ -602,24 +571,35 @@ static int service_args(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv,
 	else
 		serv->owner = NULL;
 
-	/*
-	 * Path to command,
-	 */
-	command = get_str_ent(xcp, ACL_VAR_MASTER_SERV_COMMAND, (char *) 0);
+	/* Path to command */
+	command = get_str_ent(xcp, ACL_VAR_MASTER_SERV_COMMAND, "");
 	if (command == NULL || *command == 0) {
 		acl_msg_error("no %s found", ACL_VAR_MASTER_SERV_COMMAND);
 		return -1;
 	}
 
-	serv->path = acl_concatenate(acl_var_master_daemon_dir, "/",
-			command, (char *) 0);
+	ptr_const = get_str_ent(xcp, ACL_VAR_MASTER_SERV_CMDEXT, "");
+	if (ptr_const && *ptr_const)
+		serv->cmdext = acl_mystrdup(ptr_const);
+	else
+		serv->cmdext = NULL;
 
-	/*
-	 * Notify Address
+	/* if command is a absolute path starting with '/', just use it,
+	 * else the relative path added with default path will be used.
 	 */
+	if (*command == '/')
+		ptr = acl_concatenate(command, serv->cmdext, NULL);
+	else
+		ptr = acl_concatenate(acl_var_master_daemon_dir, "/",
+				command, serv->cmdext, NULL);
+
+	serv->path    = ptr;
+//	serv->command = acl_mystrdup(command);
+
+	/* Notify Address */
 	ptr_const = get_str_ent(xcp, ACL_VAR_MASTER_NOTIFY_ADDR, "no");
 	if (ptr_const == NULL || strcasecmp(ptr_const, "no") == 0)
-		serv->notify_addr = NULL;
+		serv->notify_addr = acl_mystrdup(MONITOR_SOCK);
 	else
 		serv->notify_addr = acl_mystrdup(ptr_const);
 
@@ -636,28 +616,21 @@ static int service_args(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv,
 	serv->args = acl_argv_alloc(0);
 	acl_argv_add(serv->args, command, (char *) 0);
 
-	name = get_str_ent(xcp, ACL_VAR_MASTER_SERV_SERVICE, (const char *) 0);
-	if (name == NULL || *name == 0) {
-		acl_msg_error("no %s found", ACL_VAR_MASTER_SERV_SERVICE);
-		return -1;
-	}
-
 	/* add "-f configure_file_path" flag */
 	acl_argv_add(serv->args, "-f", path, (char *) 0);
 
 	/* copy the configure filepath */
 	serv->conf = acl_mystrdup(path);
 
-	/*
-	if (serv->max_proc == 1)
-		acl_argv_add(serv->args, "-l", (char *) 0);
-	if (serv->max_proc == 0)
-		acl_argv_add(serv->args, "-z", (char *) 0);
-	*/
+	ptr_const = get_str_ent(xcp, ACL_VAR_MASTER_SERV_SERVICE, NULL);
+	if (ptr_const == NULL || *ptr_const == 0) {
+		acl_msg_error("no %s found", ACL_VAR_MASTER_SERV_SERVICE);
+		return -1;
+	}
 
-	if (strcmp(acl_safe_basename(command), name) != 0) {
-		char *tmp = acl_concatenate("\"", name, "\"", 0);
-		acl_argv_add(serv->args, "-n", tmp, (char *) 0);
+	if (strcmp(acl_safe_basename(command), ptr_const) != 0) {
+		char *tmp = acl_concatenate("\"", ptr_const, "\"", NULL);
+		acl_argv_add(serv->args, "-n", tmp, NULL);
 		acl_myfree(tmp);
 	}
 
@@ -718,7 +691,7 @@ static int service_env(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
 	nv->value = acl_mystrdup(value);
 	(void) acl_array_append(serv->children_env, nv);
 
-	/* 为了保证兼容性 */
+	/* just for compatibility */
 	nv = (ACL_MASTER_NV *) acl_mycalloc(1, sizeof(ACL_MASTER_NV));
 	nv->name  = acl_mystrdup("LOG");
 	nv->value = acl_mystrdup(value);
@@ -730,6 +703,35 @@ static int service_env(ACL_XINETD_CFG_PARSER *xcp, ACL_MASTER_SERV *serv)
 		nv->name  = acl_mystrdup("SERVICE_ENV");
 		nv->value = acl_mystrdup(value);
 		(void) acl_array_append(serv->children_env, nv);
+	}
+
+	return 0;
+}
+
+static int valid_extname(const char *filename)
+{
+	ACL_ITER    iter;
+	const char *ext;
+
+	/* skip implicit files */
+	if (*filename == '.')
+		return 0;
+
+	if (EQ(acl_var_master_file_exts, "*")
+		|| EQ(acl_var_master_file_exts, "*.*")) {
+
+		return 1;
+	}
+
+	ext = strchr(filename, '.');
+	if (ext == NULL)
+		ext = filename;
+	else
+		ext++;
+
+	acl_foreach(iter, __exts) {
+		if (EQ(ext, (char *) iter.data))
+			return 1;
 	}
 
 	return 0;
@@ -762,6 +764,9 @@ ACL_MASTER_SERV *acl_master_ent_get()
 			acl_vstring_free(path_buf);
 			return NULL;
 		}
+
+		if (!valid_extname(filepath))
+			continue;
 
 		acl_vstring_sprintf(path_buf, "%s/%s",
 			acl_scan_dir_path(__scan), filepath);
@@ -803,21 +808,26 @@ ACL_MASTER_SERV *acl_master_ent_load(const char *filepath)
 	serv->flags = 0;
 	serv->inet_flags = 0;
 
+	/* service_transport must before service_args */
 	if (service_transport(xcp, serv) < 0) {
 		acl_master_ent_free(serv);
+		acl_xinetd_cfg_free(xcp);
 		return NULL;
 	}
 
 	service_wakeup_time(xcp, serv);
 	service_proc(xcp, serv);
 	service_control(xcp, serv);
+	service_check(xcp, serv);
 
 	if (service_args(xcp, serv, filepath) < 0) {
 		acl_master_ent_free(serv);
+		acl_xinetd_cfg_free(xcp);
 		return NULL;
 	}
 	if (service_env(xcp, serv) < 0) {
 		acl_master_ent_free(serv);
+		acl_xinetd_cfg_free(xcp);
 		return NULL;
 	}
 
@@ -897,6 +907,10 @@ void acl_master_ent_free(ACL_MASTER_SERV *serv)
 		acl_myfree(serv->name);
 	if (serv->path)
 		acl_myfree(serv->path);
+	//if (serv->command)
+	//	acl_myfree(serv->command);
+	if (serv->cmdext)
+		acl_myfree(serv->cmdext);
 	if (serv->conf)
 		acl_myfree(serv->conf);
 	if (serv->owner)
@@ -905,6 +919,8 @@ void acl_master_ent_free(ACL_MASTER_SERV *serv)
 		acl_myfree(serv->notify_addr);
 	if (serv->notify_recipients)
 		acl_myfree(serv->notify_recipients);
+	if (serv->version)
+		acl_myfree(serv->version);
 	if (serv->args)
 		acl_argv_free(serv->args);
 	if (serv->children_env)
@@ -942,18 +958,18 @@ int acl_master_same_name(ACL_MASTER_SERV *serv, const char *name)
 	return ret;
 }
 
-ACL_MASTER_SERV *acl_master_ent_find(const char *name, int type)
+ACL_MASTER_SERV *acl_master_ent_find(const char *path)
 {
 	ACL_MASTER_SERV *serv;
 
 	if (acl_var_master_head == NULL) {
-		acl_msg_error("%s(%d), %s: acl_var_master_head null",
+		acl_msg_info("%s(%d), %s: acl_var_master_head null",
 			__FILE__, __LINE__, __FUNCTION__);
 		return NULL;
 	}
 
 	for (serv = acl_var_master_head; serv; serv = serv->next) {
-		if (serv->type == type && acl_master_same_name(serv, name))
+		if (strcmp(serv->conf, path) == 0)
 			return serv;
 	}
 

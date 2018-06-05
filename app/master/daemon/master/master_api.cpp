@@ -41,65 +41,105 @@ static bool setup_callback(const char *service, ACL_MASTER_SERV *serv,
 
 ACL_MASTER_SERV *acl_master_lookup(const char *path)
 {
-	ACL_MASTER_SERV *entry = acl_master_ent_load(path), *serv;
+	return acl_master_ent_find(path);
+}
 
-	if (entry == NULL) {
-		acl_msg_error("%s(%d), %s: load %s error %s", __FILE__,
-			__LINE__, __FUNCTION__, path, acl_last_serror());
-		return NULL;
+static int check_command(ACL_MASTER_SERV *entry, const char *ext)
+{
+	char *path;
+
+	/* if ext name not NULL, then add it as the extern name of command */
+	if (ext && *ext)
+		path = acl_concatenate(entry->path, ext, NULL);
+	else
+		path = acl_concatenate(entry->path, entry->cmdext, NULL);
+
+	if (access(path, F_OK) != 0) {
+		acl_msg_error("%s(%d), %s: command %s can't be executed, %s",
+			__FILE__, __LINE__, __FUNCTION__, path,
+			acl_last_serror());
+		return -1;
 	}
 
-	serv = acl_master_ent_find(entry->name, entry->type);
-	acl_master_ent_free(entry);
-	return serv;
+	acl_myfree(entry->path);
+	entry->path = path;
+
+	acl_msg_info("service command path=%s", path);
+
+	/* reset argv be used to transfer execvp */
+	acl_argv_set(entry->args, 0, path);
+
+	return 0;
 }
 
 ACL_MASTER_SERV *acl_master_start(const char *path, int *nchilden,
-	int *nsignaled, STATUS_CALLBACK callback, void *ctx)
+	int *nsignaled, STATUS_CALLBACK callback, void *ctx, const char *ext)
 {
-	ACL_MASTER_SERV *entry = acl_master_ent_load(path), *serv;
+	ACL_MASTER_SERV *entry = acl_master_lookup(path);
 
+	if (entry != NULL) {
+		acl_msg_error("%s(%d), %s: same service %s running",
+			__FILE__, __LINE__, __FUNCTION__, path);
+		return NULL;
+	}
+
+	entry = acl_master_ent_load(path);
 	if (entry == NULL) {
 		acl_msg_error("%s(%d), %s: load %s error %s", __FILE__,
 			__LINE__, __FUNCTION__, path, acl_last_serror());
 		return NULL;
 	}
 
-	serv = acl_master_ent_find(entry->name, entry->type);
-	if (serv != NULL) {
-		acl_msg_error("%s(%d), %s: same service %s %d running",
-			__FILE__, __LINE__, __FUNCTION__,
-			entry->name, entry->type);
+	if (check_command(entry, ext) < 0) {
+		acl_msg_error("%s(%d), %s: can't start service %s, %s",
+			__FILE__, __LINE__, __FUNCTION__, entry->path, path);
 		acl_master_ent_free(entry);
 		return NULL;
 	}
-	
+
+	if (acl_master_service_start(entry) < 0) {
+		acl_msg_error("%s(%d), %s: start %s error",
+			__FILE__, __LINE__, __FUNCTION__, path);
+		acl_master_ent_free(entry);
+		return NULL;
+	}
+
 	if (nchilden)
 		*nchilden = entry->prefork_proc;
 	if (nsignaled)
 		*nsignaled = entry->prefork_proc;
 
 	(void) setup_callback(__FUNCTION__, entry, callback, ctx);
-
 	entry->next = acl_var_master_head;
 	acl_var_master_head = entry;
-
-	acl_master_service_start(entry);
 
 	return entry;
 }
 
 ACL_MASTER_SERV *acl_master_restart(const char *path, int *nchilden,
-	int *nsignaled, STATUS_CALLBACK callback, void *ctx)
+	int *nsignaled, STATUS_CALLBACK callback, void *ctx, const char *ext)
 {
         ACL_MASTER_SERV *serv = acl_master_lookup(path);
 
-        if (serv != NULL) {
-		acl_master_service_restart(serv);
-		return serv;
+        if (serv == NULL)
+		return acl_master_start(path, nchilden, nsignaled,
+				callback, ctx, ext);
+
+	ACL_MASTER_SERV *entry = acl_master_ent_load(path);
+	if (entry == NULL) {
+		acl_msg_error("%s(%d), %s: service load %s error %s", __FILE__,
+			__LINE__, __FUNCTION__, path, acl_last_serror());
+		return NULL;
 	}
 
-        return acl_master_start(path, nchilden, nsignaled, callback, ctx);
+	if (check_command(entry, ext) < 0) {
+		acl_msg_error("%s(%d), %s: can't restart service %s, %s",
+			__FILE__, __LINE__, __FUNCTION__, serv->path, path);
+		return NULL;
+	}
+
+	acl_master_refresh_service(entry);
+	return serv;
 }
 
 /* kill processes of service according the master_service name in configure */
@@ -116,7 +156,7 @@ int acl_master_kill(const char *path)
 	}
 
 	for (servp = &acl_var_master_head; (iter = *servp) != 0;) {
-		if (iter->type == serv->type && SAME(iter->name, serv->name)) {
+		if (SAME(iter->conf, path)) {
 			*servp = iter->next;
 			acl_master_service_kill(iter);
 			return 0;
@@ -144,10 +184,10 @@ int acl_master_stop(const char *path)
 	}
 
 	for (servp = &acl_var_master_head; (iter = *servp) != 0;) {
-		if (iter->type == serv->type && SAME(iter->name, serv->name)) {
+		if (SAME(iter->conf, path)) {
 			*servp = iter->next;
-                        // this service object will be freed after all
-                        // children of which exited.
+			// this service object will be freed after all
+			// children of which exited.
 			acl_master_service_stop(iter);
 			return 0;
 		} else

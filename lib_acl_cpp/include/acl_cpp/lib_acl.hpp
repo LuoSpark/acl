@@ -36,8 +36,12 @@
 #include "stdlib/trigger.hpp"
 #include "stdlib/atomic.hpp"
 #include "stdlib/bitmap.hpp"
+#include "stdlib/diff_object.hpp"
+#include "stdlib/diff_string.hpp"
+#include "stdlib/diff_manager.hpp"
 
 #include "serialize/gsoner.hpp"
+#include "serialize/gson_helper.ipp"
 
 #include "memcache/memcache.hpp"
 #include "memcache/memcache_pool.hpp"
@@ -188,6 +192,10 @@
 #include "redis/redis_slot.hpp"
 #include "redis/redis_node.hpp"
 #include "redis/redis_geo.hpp"
+#include "redis/redis_slave.hpp"
+#include "redis/redis_master.hpp"
+#include "redis/redis_sentinel.hpp"
+#include "redis/redis_role.hpp"
 #include "redis/redis.hpp"
 
 #include "disque/disque.hpp"

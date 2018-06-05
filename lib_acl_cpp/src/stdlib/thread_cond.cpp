@@ -90,10 +90,10 @@ bool thread_cond::wait(long long microseconds /* = -1 */)
 	gettimeofday(&tv, NULL);
 
 	struct timespec ts;
-	ts.tv_sec   = tv.tv_sec + microseconds / SEC_TO_MIS;
+	ts.tv_sec   = (time_t) (tv.tv_sec + microseconds / SEC_TO_MIS);
 	long long n = (tv.tv_usec + microseconds % SEC_TO_MIS) * MIS_TO_NS;
-	ts.tv_nsec  = n % SEC_TO_NS;
-	ts.tv_sec  += n / SEC_TO_NS;
+	ts.tv_nsec  = (long) n % SEC_TO_NS;
+	ts.tv_sec  += (long) n / SEC_TO_NS;
 
 	int  ret1 = acl_pthread_cond_timedwait(cond_, mutex, &ts);
 	if (ret1)
@@ -101,7 +101,9 @@ bool thread_cond::wait(long long microseconds /* = -1 */)
 #ifdef ACL_UNIX
 		acl_set_error(ret1);
 #endif
-		logger_error("pthread_cond_timedwait error %s", last_serror());
+		if (ret1 != ACL_ETIMEDOUT)
+			logger_error("pthread_cond_timedwait error %s",
+				last_serror());
 	}
 
 	bool ret2 = mutex_->unlock();

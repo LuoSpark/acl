@@ -70,9 +70,11 @@ public:
 	 * 向 HTTP 头中添加字段
 	 * @param name {const char*} 字段名，非空指针
 	 * @param value {const char*} 字段值，非空指针
+	 * @param replace {bool} 如果存在重复项时是否自动覆盖旧数据
 	 * @return {http_header&} 返回本对象的引用，便于用户连续操作
 	 */
-	http_header& add_entry(const char* name, const char* value);
+	http_header& add_entry(const char* name, const char* value,
+			bool replace = true);
 	
 	/**
 	 * 设置 HTTP 头中的 Content-Length 字段
@@ -196,6 +198,13 @@ public:
 	 * @return {bool} 返回 false 表明是 HTTP 响应头
 	 */
 	bool is_request(void) const;
+
+	/**
+	 * 设置标志位，针对 HTTP 请求的 URI 中的 ? 问号被转义(即被转成 %3F)的请求是否
+	 * 做兼容性处理，内部缺省为做兼容性处理
+	 * @param on {bool} 为 true 表示做兼容性处理
+	 */
+	static void uri_unsafe_correct(bool on);
 
 	//////////////////////////////////////////////////////////////////////
 	//                        HTTP 请求方法函数

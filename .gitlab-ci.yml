@@ -20,10 +20,11 @@ variables:
     stage: build
     script:
         - yum install -y zlib-devel
-        - cd packaging && make rpm
+        - cd packaging && make rpm && rm x86_64/acl-tools*.rpm
     artifacts:
         paths:
-            - packaging/x86_64/*.rpm
+            - packaging/x86_64/acl-libs-*.rpm
+            - packaging/x86_64/acl-master-*.rpm
     only:
       - /^check-.*$/
     except:
@@ -41,21 +42,23 @@ variables:
       - /^devel-.*$/
     artifacts:
         paths:
-            - packaging/x86_64/*.rpm
+            - packaging/x86_64/acl-libs-*.rpm
+            - packaging/x86_64/acl-master-*.rpm
 
 .basepublishprerelease: &PRERELEASE
     image: ${BUILDIMAGES}
     stage: publish
     script:
         - yum install -y zlib-devel
-        - cd packaging && make
+        - cd packaging && make rpm && rm x86_64/acl-tools*.rpm
         - cd ${CI_PROJECT_DIR} && /tools/publish.sh -t prerelease
     coverage: '/lines......: \d+\.\d+%/'
     only:
         - /^release-.*$/
     artifacts:
         paths:
-            - packaging/x86_64/*.rpm
+            - packaging/x86_64/acl-libs-*.rpm
+            - packaging/x86_64/acl-master-*.rpm
 
 stages:
     - test
