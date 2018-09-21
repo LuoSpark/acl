@@ -30,6 +30,7 @@
 #include <signal.h>
 
 #if defined(SYS_UNIX)
+#include <net/if.h>
 #include <unistd.h>
 #include <dlfcn.h>
 #include <sys/socket.h>
@@ -45,10 +46,10 @@
 #include <sys/resource.h>
 #include <ucontext.h>
 
-#if defined(__APPLE__)
+//#if defined(__APPLE__)
 # include <sys/types.h>
 # include <sys/uio.h>
-#endif
+//#endif
 
 #define STRDUP strdup
 #define GETPID getpid
@@ -76,18 +77,16 @@
 # include <pthread_np.h>
 #endif
 
-struct SOCK_ADDR {
-	union {
-		struct sockaddr_storage ss;
+typedef union {
+	struct sockaddr_storage ss;
 #ifdef AF_INET6
-		struct sockaddr_in6 in6;
+	struct sockaddr_in6 in6;
 #endif
-		struct sockaddr_in in;
+	struct sockaddr_in in;
 #ifdef ACL_UNIX
-		struct sockaddr_un un;
+	struct sockaddr_un un;
 #endif
-		struct sockaddr sa;
-	} sa;
-};
+	struct sockaddr sa;
+} SOCKADDR;
 
 #endif

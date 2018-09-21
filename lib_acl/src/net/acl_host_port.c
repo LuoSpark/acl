@@ -35,9 +35,7 @@ const char *acl_host_port(char *buf, char **host, char *def_host,
 {
 	char *cp = buf;
 
-	/*
-	 * [host]:port, [host]:, [host].
-	 */
+	/* [host]:port, [host]:, [host]. */
 	if (*cp == '[') {
 		*host = ++cp;
 		if ((cp = acl_split_at(cp, ']')) == 0)
@@ -46,23 +44,27 @@ const char *acl_host_port(char *buf, char **host, char *def_host,
 			return "garbage after \"]\"";
 		*port = *cp ? cp : def_service;
 	}
-
-	/*
-	 * host:port, host:, host, :port, port.
-	 */
+	/* host#port, host#, host, #port, port. */
+	else if ((cp = acl_split_at_right(buf, ACL_ADDR_SEP)) != 0) {
+		*host = *buf ? buf : def_host;
+		*port = *cp ? cp : def_service;
+	}
+	/* host:port, host:, host, :port, port. */
 	else if ((cp = acl_split_at_right(buf, ':')) != 0) {
 		*host = *buf ? buf : def_host;
 		*port = *cp ? cp : def_service;
 	} else {
-		*host = def_host ? def_host : (*buf ? buf : 0);
-		*port = def_service ? def_service : (*buf ? buf : 0);
+		*host = *buf ? buf : (def_host ? def_host : NULL);
+		*port = def_service ? def_service : NULL;
 	}
 
 	if (*host == 0)
 		return "missing host information";
 
-	if (*port == 0)
-		return "missing service information";
+	/*
+	 * if (*port == 0)
+	 *	return "missing service information";
+	 */
 
 	/*
 	 * Final sanity checks. We're still sloppy, allowing bare numerical
@@ -70,10 +72,13 @@ const char *acl_host_port(char *buf, char **host, char *def_host,
 	 */
 	if (*host != def_host
 	    && !acl_valid_hostname(*host, ACL_DONT_GRIPE)
-	    && !acl_valid_hostaddr(*host, ACL_DONT_GRIPE))
-	{
+	    && !acl_valid_hostaddr(*host, ACL_DONT_GRIPE)) {
+
 		return "valid hostname or network address required";
 	}
+
+	if (*port == 0)
+		return NULL;
 
 	if (*port != def_service && ACL_ISDIGIT(**port) && !acl_alldig(*port))
 		return "garbage after numerical service";
@@ -91,7 +96,7 @@ static int host_port(char *buf, char **host, char **port)
 		return -1;
 	}
 
-	if (*port == NULL || atoi(*port) < 0) {
+	if (*port != NULL && atoi(*port) < 0) {
 		acl_msg_error("%s(%d): invalid port: %s, addr: %s",
 			__FILE__, __LINE__, *port ? *port : "null", buf);
 		return -1;
@@ -136,8 +141,8 @@ struct addrinfo *acl_host_addrinfo(const char *addr, int type)
 	hints.ai_flags    = AI_V4MAPPED | AI_ADDRCONFIG;
 #endif
 	if ((err = getaddrinfo(host, port, &hints, &res0))) {
-		acl_msg_error("%s(%d): getaddrinfo error %s, peer=%s",
-			__FILE__, __LINE__, gai_strerror(err), host);
+		acl_msg_error("%s(%d): getaddrinfo error %s, host=%s, addr=%s",
+			__FILE__, __LINE__, gai_strerror(err), host, addr);
 		acl_myfree(buf);
 		return NULL;
 	}

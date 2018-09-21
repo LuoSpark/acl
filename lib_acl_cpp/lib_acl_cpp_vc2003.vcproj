@@ -448,6 +448,9 @@ copy $(TargetName).pdb ..\dist\lib\win32\$(TargetName).pdb /Y
 					RelativePath=".\src\stdlib\thread_queue.cpp">
 				</File>
 				<File
+					RelativePath=".\src\stdlib\token_tree.cpp">
+				</File>
+				<File
 					RelativePath=".\src\stdlib\url_coder.cpp">
 				</File>
 				<File
@@ -769,6 +772,9 @@ copy $(TargetName).pdb ..\dist\lib\win32\$(TargetName).pdb /Y
 				</File>
 				<File
 					RelativePath=".\src\db\sqlite_manager.cpp">
+				</File>
+				<File
+					RelativePath=".\src\db\sqlite_cursor.cpp">
 				</File>
 				<File
 					RelativePath=".\src\db\sqlite_pool.cpp">
@@ -1160,6 +1166,9 @@ copy $(TargetName).pdb ..\dist\lib\win32\$(TargetName).pdb /Y
 					RelativePath=".\include\acl_cpp\stdlib\string.hpp">
 				</File>
 				<File
+					RelativePath=".\include\acl_cpp\stdlib\tbox.hpp">
+				</File>
+				<File
 					RelativePath=".\include\acl_cpp\stdlib\thread.hpp">
 				</File>
 				<File
@@ -1173,6 +1182,9 @@ copy $(TargetName).pdb ..\dist\lib\win32\$(TargetName).pdb /Y
 				</File>
 				<File
 					RelativePath=".\include\acl_cpp\stdlib\thread_queue.hpp">
+				</File>
+				<File
+					RelativePath=".\include\acl_cpp\stdlib\token_tree.hpp">
 				</File>
 				<File
 					RelativePath=".\include\acl_cpp\stdlib\trigger.hpp">
@@ -1379,6 +1391,9 @@ copy $(TargetName).pdb ..\dist\lib\win32\$(TargetName).pdb /Y
 					RelativePath=".\include\acl_cpp\db\db_handle.hpp">
 				</File>
 				<File
+					RelativePath=".\include\acl_cpp\db\db_cursor.hpp">
+				</File>
+				<File
 					RelativePath=".\include\acl_cpp\db\db_mysql.hpp">
 				</File>
 				<File
@@ -1422,6 +1437,9 @@ copy $(TargetName).pdb ..\dist\lib\win32\$(TargetName).pdb /Y
 				</File>
 				<File
 					RelativePath=".\include\acl_cpp\db\sqlite_manager.hpp">
+				</File>
+				<File
+					RelativePath=".\include\acl_cpp\db\sqlite_cursor.hpp">
 				</File>
 				<File
 					RelativePath=".\include\acl_cpp\db\sqlite_pool.hpp">

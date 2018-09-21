@@ -33,6 +33,7 @@ CFLAGS = -c -g -W \
 -Winvalid-pch \
 -DACL_PREPARE_COMPILE \
 -DUSE_REUSEPORT \
+#-Wno-implicit-fallthrough \
 #-fstack-protector-all \
 #-DDEBUG_MEM
 #-DUSE_EPOLL \
@@ -66,6 +67,7 @@ ifeq ($(RANLIB),)
 	RANLIB = ranlib
 endif
 
+#using "gcc -dumpversion" can get the gcc's version more easily
 ifeq ($(findstring gcc, $(CC)), gcc)
 	CFLAGS += -Wstrict-prototypes
 	GCC_VERSION=$(shell gcc --version | grep ^gcc | sed 's/^.* //g')

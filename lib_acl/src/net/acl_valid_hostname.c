@@ -13,6 +13,7 @@
 /* Utility library. */
 
 #include "stdlib/acl_msg.h"
+#include "stdlib/acl_mystring.h"
 #include "net/acl_valid_hostname.h"
 
 #endif
@@ -100,48 +101,135 @@ int acl_valid_hostname(const char *name, int gripe)
 	return 1;
 }
 
+int acl_valid_unix(const char *addr)
+{
+	if (strchr(addr, '/') != NULL)
+		return 1;
+
+	return 0;
+}
+
 /* acl_valid_hostaddr - verify numerical address syntax */
+
+static int valid_ipv4_field(const char *ptr)
+{
+	int n;
+
+	if (*ptr == '*' && *(ptr + 1) == 0)
+		return 1;
+	if (!acl_alldig(ptr))
+		return 0;
+	n = atoi(ptr);
+	if (n < 0 || n > 255)
+		return 0;
+
+	return 1;
+}
+
+static int valid_port(const char *ptr)
+{
+	int n;
+
+	if (!acl_alldig(ptr))
+		return 0;
+
+	n = atoi(ptr);
+	return n >= 0 && n <= 65535;
+}
+
+static int valid_ipv4_wildcard(const char *addr)
+{
+	ACL_ARGV *tokens = acl_argv_split(addr, ".");
+	char     *ptr, *s4;
+	int       i;
+
+	if (tokens->argc != 4) {
+		acl_argv_free(tokens);
+		return 0;
+	}
+
+	for (i = 0; i < 3; i++) {
+		ptr = tokens->argv[i];
+		if (!valid_ipv4_field(ptr)) {
+			acl_argv_free(tokens);
+			return 0;
+		}
+	}
+
+	s4 = tokens->argv[3];
+	ptr = strchr(s4, ACL_ADDR_SEP);
+	if (ptr == NULL)
+		ptr = strchr(s4, ':');
+	if (ptr)
+		*ptr++ = 0;
+
+	if (!valid_ipv4_field(s4)) {
+		acl_argv_free(tokens);
+		return 0;
+	}
+
+	if (ptr)
+		i = valid_port(ptr);
+	else
+		i = 1;
+	acl_argv_free(tokens);
+	return i;
+}
 
 int acl_valid_hostaddr(const char *addr, int gripe)
 {
 	const char *myname = "acl_valid_hostaddr";
 
-	/*
-	 * Trivial cases first.
-	 */
+	/* Trivial cases first. */
 	if (*addr == 0) {
 		if (gripe)
 			acl_msg_warn("%s: empty address", myname);
 		return 0;
 	}
 
-	/*
-	 * Protocol-dependent processing next.
-	 */
-	if (strchr(addr, ':') != 0)
-		return acl_valid_ipv6_hostaddr(addr, gripe);
-	else
-		return acl_valid_ipv4_hostaddr(addr, gripe);
+#define VALID_PORT(x) (acl_alldig((x)) && atoi((x)) > 0)
+#define VALID_SEP(x)  ((x) == ACL_ADDR_SEP || (x) == ':')
+
+	/* port */
+	if (VALID_PORT(addr))
+		return 1;
+	/* |port, :port */
+	if (VALID_SEP(*addr) && VALID_PORT(addr + 1))
+		return 1;
+	/* *|port, *:port */
+	if (*addr == '*' && VALID_SEP(*(addr + 1)) && VALID_PORT(addr + 2))
+		return 1;
+	if (valid_ipv4_wildcard(addr))
+		return 1;
+
+	/* Protocol-dependent processing next. */
+	return acl_valid_ipv4_hostaddr(addr, gripe)
+		|| acl_valid_ipv6_hostaddr(addr, gripe);
 }
 
 /* acl_valid_ipv4_hostaddr - test dotted quad string for correctness */
 
-int acl_valid_ipv4_hostaddr(const char *addr, int gripe)
+int acl_valid_ipv4_hostaddr(const char *addr_in, int gripe)
 {
-	char   *myname = "acl_valid_ipv4_hostaddr";
+	char *myname = "acl_valid_ipv4_hostaddr";
+	int   in_byte = 0, byte_count = 0, byte_val = 0, ch;
+	char  addr[128], *ptr;
 	const char *cp;
-	int     in_byte = 0;
-	int     byte_count = 0;
-	int     byte_val = 0;
-	int     ch;
 
 #define BYTES_NEEDED	4
+
+	ACL_SAFE_STRNCPY(addr, addr_in, sizeof(addr));
+	if ((ptr = strrchr(addr, ACL_ADDR_SEP)) != NULL) {
+		*ptr = 0;
+	} else if ((ptr = strrchr(addr, ':')) != NULL) {
+		*ptr = 0;
+	}
 
 	/*
 	 * Scary code to avoid sscanf() overflow nasties.
 	 * 
-	 * This routine is called by valid_ipv6_hostaddr(). It must not call that
-	 * routine, to avoid deadly recursion.
+	 * This routine is called by valid_ipv6_hostaddr(). It must not call
+	 * that routine, to avoid deadly recursion.
 	 */
 	for (cp = addr; (ch = *(unsigned const char *) cp) != 0; cp++) {
 		if (ACL_ISDIGIT(ch)) {
@@ -176,8 +264,8 @@ int acl_valid_ipv4_hostaddr(const char *addr, int gripe)
 			in_byte = 0;
 		} else {
 			if (gripe)
-				acl_msg_warn("%s: invalid character %d(decimal): %.100s",
-					myname, ch, addr);
+				acl_msg_warn("%s: invalid character %d"
+					"(decimal): %.100s", myname, ch, addr);
 			return 0;
 		}
 	}
@@ -194,13 +282,23 @@ int acl_valid_ipv4_hostaddr(const char *addr, int gripe)
 
 /* acl_valid_ipv6_hostaddr - validate IPv6 address syntax */
 
-int acl_valid_ipv6_hostaddr(const char *addr, int gripe)
+int acl_valid_ipv6_hostaddr(const char *addr_in, int gripe)
 {
 	const char *myname = "acl_valid_ipv6_hostaddr";
-	int     null_field = 0;
-	int     field = 0;
-	const unsigned char *cp = (const unsigned char *) addr;
-	int     len = 0;
+	int  null_field = 0, field = 0, len = 0;
+	char addr[128], *ptr;
+	const unsigned char *cp;
+
+	ACL_SAFE_STRNCPY(addr, addr_in, sizeof(addr));
+	if ((ptr = strrchr(addr, ACL_ADDR_SEP)) != NULL) {
+		*ptr = 0;
+	}
+
+	if ((ptr = strrchr(addr, '%')) != NULL) {
+		*ptr = 0;
+	}
+
+	cp = (const unsigned char *) addr;
 
 	/*
 	 * FIX 200501 The IPv6 patch validated syntax with getaddrinfo(), but I
@@ -212,8 +310,8 @@ int acl_valid_ipv6_hostaddr(const char *addr, int gripe)
 	 * We require eight-field hex addresses of the form 0:1:2:3:4:5:6:7,
 	 * 0:1:2:3:4:5:6a.6b.7c.7d, or some :: compressed version of the same.
 	 * 
-	 * Note: the character position is advanced inside the loop. I have added
-	 * comments to show why we can't get stuck.
+	 * Note: the character position is advanced inside the loop. I have
+	 * added comments to show why we can't get stuck.
 	 */
 	for (;;) {
 		switch (*cp) {

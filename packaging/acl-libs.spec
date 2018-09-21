@@ -1,4 +1,4 @@
-%define release_id 5
+%define release_id 24
 
 Summary:        The powerful c/c++ library and server framework
 Name:           acl-libs
@@ -132,6 +132,64 @@ fi
 #/opt/soft/services/acl-tools.json
 
 %changelog
+
+* Thu Sep 20 2018 zhengshuxin@qiyi.com 3.4.1-24-20180920.09
+- bugfix: fixed bugs in lib_fiber for IPV6 supporting
+
+* Wed Sep 19 2018 zhengshuxin@qiyi.com 3.4.1-23-20180919.15
+- bugfix: acl_ifconf_search in acl_ifconf.c can't handle some addrs patterns
+
+* Sun Sep 16 2018 zhengshuxin@qiyi.com 3.4.1-22-20180916.18
+- bugfix: acl_ifconf.c and some modules can't justify some UNIX path that
+  acl_master can't handle UNIX path like "master.sock" which hasn't '/' in it.
+
+* Sun Sep 16 2018 zhengshuxin@qiyi.com 3.4.1-21-20180916.21
+- feature: support IPV6 OK!
+
+* Sat Sep 06 2018 zhengshuxin@qiyi.com 3.4.1-20-20180908.21
+- fixed bugs in acl::string::begin_with API
+
+* Sat Sep 06 2018 zhengshuxin@qiyi.com 3.4.1-19-20180908.13
+- fixed bugs in acl::string::begin_with API
+
+* Thu Sep 06 2018 zhengshuxin@qiyi.com 3.4.1-18-20180906.19
+- release 3.4.1-18, prepare for adding IPV6 feature.
+
+* Mon Aug 20 2018 zhengshuxin@qiyi.com 3.4.1-17-20180820.11
+- there's some comments error in token_tree
+
+* Mon Aug 20 2018 zhengshuxin@qiyi.com 3.4.1-16-20180820.10
+- fixed one bug in token_tree's destructor
+
+* Sun Aug 19 2018 zhengshuxin@qiyi.com 3.4.1-15-20180819.15
+- lib_acl_cpp: add token_tree class
+
+* Tue Aug 07 2018 zhengshuxin@qiyi.com 3.4.1-14-20180807.10
+- optimize the storage size of ACL_VSTRING, ACL_VBUF and ACL_JSON_NODE
+
+* Fri Aug 03 2018 zhengshuxin@qiyi.com 3.4.1-13-20180803.11
+- bugfix: json parse should not ignore string value begin with space
+
+* Thu Aug 02 2018 zhengshuxin@qiyi.com 3.4.1-12-20180802.22
+- bugfix: json parser can't handle empty array object
+
+* Fri Jul 27 2018 zhengshuxin@qiyi.com 3.4.1-11-20180727.16
+- tbox: fixed one bug
+
+* Fri Jul 27 2018 zhengshuxin@qiyi.com 3.4.1-10-20180727.13
+- tbox: support transfering NULL message
+
+* Thu Jul 05 2018 zhengshuxin@qiyi.com 3.4.1-9-20180705.14
+- acl::fstream: add filelock methods
+
+* Thu Jun 28 2018 zhengshuxin@qiyi.com 3.4.1-8-20180628.21
+- tbox: rewrite tbox with C++ template class
+
+* Tue Jun 19 2018 zhengshuxin@qiyi.com 3.4.1-7-20180619.18
+- thread_cond: compiling error for wait overriding
+
+* Fri Jun 15 2018 zhengshuxin@qiyi.com 3.4.1-6-20180615.15
+- thread_cond::wait add locked parameter for one locking condition
 
 * Tue Jun 04 2018 zhengshuxin@qiyi.com 3.4.1-5-20180605.14
 - check_client: just choose one from on_refused and on_timeout to report connection status

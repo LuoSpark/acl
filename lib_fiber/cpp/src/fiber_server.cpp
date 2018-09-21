@@ -9,8 +9,6 @@
 /* including the internal headers from lib_acl/src/master */
 #include "template/master_log.h"
 
-#include "fiber/lib_fiber.h"
-
 #define STACK_SIZE	128000
 
 static int   acl_var_fiber_pid;
@@ -545,7 +543,7 @@ static void main_thread_loop(void)
 
 	acl_msg_info("daemon started, log=%s", acl_var_fiber_log_file);
 	acl_fiber_schedule_with(__fiber_schedule_event);
-	acl_msg_info("deamon stopped now, exit status=%d", __exit_status);
+	acl_msg_info("daemon stopped now, exit status=%d", __exit_status);
 	exit(__exit_status);
 }
 
@@ -654,7 +652,7 @@ static void server_alone_open(FIBER_SERVER *server, ACL_ARGV *addrs)
 
 static void servers_alone(const char *addrs, int fdtype, int nthreads)
 {
-	ACL_ARGV* tokens = acl_argv_split(addrs, ";,| \t");
+	ACL_ARGV* tokens = acl_argv_split(addrs, ";, \t");
 	int i;
 
 	__servers = servers_alloc(nthreads, tokens->argc, fdtype);

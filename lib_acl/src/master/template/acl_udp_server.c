@@ -198,13 +198,16 @@ static void get_addr(const char *addr, char *buf, size_t size)
 #ifdef ACL_WINDOWS
 	snprintf(buf, size, "%s", addr);
 #else
-	if (strchr(addr, ':') != NULL || acl_alldig(addr))
+	if (strrchr(addr, ':') || strrchr(addr, ACL_ADDR_SEP)
+		|| acl_alldig(addr)) {
+
 		snprintf(buf, size, "%s", addr);
-	else
+	} else {
 		snprintf(buf, size, "%s/%s/%s", acl_var_udp_queue_dir,
 			strcasecmp(acl_var_udp_private, "n") == 0 ?
 			  ACL_MASTER_CLASS_PUBLIC : ACL_MASTER_CLASS_PRIVATE,
 			 addr);
+	}
 #endif
 }
 
@@ -323,25 +326,26 @@ static void server_rebinding(UDP_SERVER *server, ACL_HTABLE *table)
 static void netlink_on_changed(void *ctx)
 {
 	UDP_SERVER *server = (UDP_SERVER *) ctx;
-	ACL_ARGV   *addrs = acl_ifconf_search(__service_name);
-	ACL_HTABLE *table = acl_htable_create(10, 0);
+	ACL_IFCONF *ifconf = acl_ifconf_search(__service_name);
+	ACL_HTABLE *table  = acl_htable_create(10, 0);
 	ACL_ITER    iter;
 	char        addr[MAX];
 
-	if (addrs == NULL) {
+	if (ifconf == NULL) {
 		acl_msg_error("%s(%d): acl_ifconf_search null, service=%s",
 			__FUNCTION__, __LINE__, __service_name);
 		return;
 	}
 
-	acl_foreach(iter, addrs) {
-		get_addr((const char *) iter.data, addr, sizeof(addr));
+	acl_foreach(iter, ifconf) {
+		const ACL_IFADDR *ifaddr = (const ACL_IFADDR *) iter.data;
+		get_addr(ifaddr->addr, addr, sizeof(addr));
 		acl_htable_enter(table, addr, addr);
 	}
 
 	server_rebinding(server, table);
 	acl_htable_free(table, NULL);
-	acl_argv_free(addrs);
+	acl_free_ifaddrs(ifconf);
 }
 
 #endif	// ACL_LINUX
@@ -649,22 +653,24 @@ static ACL_VSTREAM *server_bind_one(const char *addr)
 	return stream;
 }
 
-static void server_binding(UDP_SERVER *server, ACL_ARGV *addrs)
+static void server_binding(UDP_SERVER *server, ACL_IFCONF *ifconf)
 {
 	char addr[MAX];
 	ACL_ITER iter;
 	int i = 0;
 
-	acl_foreach(iter, addrs) {
+	acl_foreach(iter, ifconf) {
 		ACL_VSTREAM *stream;
+		ACL_IFADDR *ifaddr = (ACL_IFADDR *) iter.data;
 
-		get_addr((const char *) iter.data, addr, sizeof(addr));
+		get_addr(ifaddr->addr, addr, sizeof(addr));
 		stream = server_bind_one(addr);
 
 		acl_event_enable_read(server->event, stream,
 			0, udp_server_read, server);
 		server->streams[i++] = stream;
-		acl_msg_info("bind %s addr ok, fd %d",
+		acl_msg_info("%s(%d), %s: bind %s addr ok, fd %d",
+			__FILE__, __LINE__, __FUNCTION__,
 			(char *) iter.data, SOCK(stream));
 	}
 
@@ -676,21 +682,21 @@ static void server_binding(UDP_SERVER *server, ACL_ARGV *addrs)
 static UDP_SERVER *servers_binding(const char *service,
 	int event_mode, int nthreads)
 {
-	ACL_ARGV *addrs = acl_ifconf_search(service);
+	ACL_IFCONF *ifconf = acl_ifconf_search(service);
 	UDP_SERVER *servers;
 	int i = 0;
 
-	if (addrs == NULL)
+	if (ifconf == NULL)
 		acl_msg_fatal("%s(%d), %s: no addrs available for %s",
 			__FILE__, __LINE__, __FUNCTION__, service);
 
-	__socket_count = addrs->argc;
+	__socket_count = ifconf->length;
 	servers = servers_alloc(event_mode, nthreads, __socket_count);
 
 	for (i = 0; i < nthreads; i++)
-		server_binding(&servers[i], addrs);
+		server_binding(&servers[i], ifconf);
 
-	acl_argv_free(addrs);
+	acl_free_ifaddrs(ifconf);
 	return servers;
 }
 
@@ -738,38 +744,32 @@ static UDP_SERVER *servers_open(int event_mode, int nthreads, int sock_count)
 
 static UDP_SERVER *servers_create(const char *service, int nthreads)
 {
-	UDP_SERVER *servers = NULL;
-
-	if (strcasecmp(acl_var_udp_event_mode, "poll") == 0)
+	if (strcasecmp(acl_var_udp_event_mode, "poll") == 0) {
 		__event_mode = ACL_EVENT_POLL;
-	else if (strcasecmp(acl_var_udp_event_mode, "kernel") == 0)
+	} else if (strcasecmp(acl_var_udp_event_mode, "kernel") == 0) {
 		__event_mode = ACL_EVENT_KERNEL;
-	else
+	} else {
 		__event_mode = ACL_EVENT_SELECT;
+	}
 
 	__main_event = acl_event_new(__event_mode, 0,
 		acl_var_udp_delay_sec, acl_var_udp_delay_usec);
 
-#ifdef ACL_UNIX
-	if (__daemon_mode) {
+	if (!__daemon_mode) {
+		return servers_binding(service, __event_mode, nthreads);
+	}
+
+#ifdef	ACL_UNIX
 # ifdef SO_REUSEPORT
-		servers = servers_binding(service, __event_mode, nthreads);
+	return servers_binding(service, __event_mode, nthreads);
 # else
-		/* __socket_count from command argv */
-		servers = servers_open(__event_mode, nthreads, __socket_count);
+	/* __socket_count from command argv */
+	return servers_open(__event_mode, nthreads, __socket_count);
 # endif
-	} else
-		servers = servers_binding(service, __event_mode, nthreads);
-
-#else	/* !ACL_UNIX */
-	if (__daemon_mode) {
-		acl_msg_fatal("%s(%d): not support daemon mode!",
-			__FILE__, __LINE__);
-	} else
-		servers = servers_binding(service, __event_mode, nthreads);
-#endif /* ACL_UNIX */
-
-	return servers;
+#else
+	acl_msg_fatal("%s(%d): not support daemon mode!", __FILE__, __LINE__);
+	return NULL;  /* just avoid compiling warning */
+#endif
 }
 
 static void *thread_main(void *ctx)

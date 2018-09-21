@@ -1,5 +1,26 @@
 修改历史列表：
 
+633) 2018.9.19
+633.1) bugfix: acl_ifconf.c 中的 acl_ifconf_search 修正几处地址匹配模式问题
+633.2) compiling: AF_UNIX 在 VC 中虽然有定义，但对应的域套接地址结构却不存在，
+MS 太坑人
+
+632) 2018.9.18
+632.1) feature: acl_cache2 中新增一些方便使用的接口
+
+631) 2018.9.10 -- 9.16
+631.1) feature: 网络通信及域名解析全面支持 IPV6!
+
+630) 2018.8.6
+630.1) optimize: 优化 ACL_VSTRING, ACL_VBUF, ACL_JSON_NODE 对象的存储空间大小
+
+629) 2018.8.3
+629.1) bugfix: acl_json_parse.c 在分析 Json 数据时，针对字符串对象，如果字符串
+值的开始部分为空格，则会被过滤掉，此问题已修复
+
+628) 2018.8.2
+628.1) bugfix: acl_json_parse.c 不能处理空数组的情况
+
 627) 2018.5.17
 627.1) bugfix: acl_write_wait.c 中使用 poll 方法时，针对 POLLHUP, POLLERR 应
 直接返回正常，让 write 函数触发异常行为

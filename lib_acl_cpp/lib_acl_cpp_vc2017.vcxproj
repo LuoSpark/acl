@@ -145,7 +145,7 @@
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(ProjectName)_vc2017d</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectName)_vc2015d</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectName)_vc2017d</TargetName>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='DebugDll|Win32'">$(ProjectName)_d</TargetName>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='DebugDll|x64'">$(ProjectName)_d</TargetName>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Releasedll|Win32'">$(ProjectName)</TargetName>
@@ -153,7 +153,7 @@
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='DebugDll|Win32'">true</LinkIncremental>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='DebugDll|x64'">true</LinkIncremental>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(ProjectName)_vc2017</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectName)_vc2015</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectName)_vc2017</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IntDir>Debug\</IntDir>
@@ -206,13 +206,13 @@ copy $(TargetName).pdb ..\dist\lib\win32\$(TargetName).pdb /Y</Command>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>acl_stdafx.hpp</PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile>$(IntDir)$(TargetName).pch</PrecompiledHeaderOutputFile>
-      <ProgramDataBaseFileName>$(ProjectName)_vc2015d.pdb</ProgramDataBaseFileName>
+      <ProgramDataBaseFileName>$(ProjectName)_vc2017d.pdb</ProgramDataBaseFileName>
       <WarningLevel>Level3</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Lib>
-      <OutputFile>$(ProjectName)_vc2015d.lib</OutputFile>
+      <OutputFile>$(ProjectName)_vc2017d.lib</OutputFile>
       <TargetMachine>MachineX64</TargetMachine>
     </Lib>
     <PostBuildEvent>
@@ -247,12 +247,12 @@ copy $(TargetName).pdb ..\dist\lib\win32\$(TargetName).pdb /Y</Command>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>acl_stdafx.hpp</PrecompiledHeaderFile>
-      <ProgramDataBaseFileName>$(OutDir)$(ProjectName)_vc2015.pdb</ProgramDataBaseFileName>
+      <ProgramDataBaseFileName>$(OutDir)$(ProjectName)_vc2017.pdb</ProgramDataBaseFileName>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Lib>
-      <OutputFile>$(OutDir)$(ProjectName)_vc2015.lib</OutputFile>
+      <OutputFile>$(OutDir)$(ProjectName)_vc2017.lib</OutputFile>
       <TargetMachine>MachineX64</TargetMachine>
     </Lib>
     <PostBuildEvent>
@@ -427,6 +427,7 @@ copy $(TargetName).pdb ..\dist\lib\win64\$(TargetName).pdb /Y
     <ClCompile Include="src\db\mysql_pool.cpp" />
     <ClCompile Include="src\db\pgsql_pool.cpp" />
     <ClCompile Include="src\db\sqlite_manager.cpp" />
+    <ClCompile Include="src\db\sqlite_cursor.cpp" />
     <ClCompile Include="src\db\sqlite_pool.cpp" />
     <ClCompile Include="src\disque\disque.cpp" />
     <ClCompile Include="src\disque\disque_cond.cpp" />
@@ -561,6 +562,7 @@ copy $(TargetName).pdb ..\dist\lib\win64\$(TargetName).pdb /Y
     <ClCompile Include="src\stdlib\thread_mutex.cpp" />
     <ClCompile Include="src\stdlib\thread_pool.cpp" />
     <ClCompile Include="src\stdlib\thread_queue.cpp" />
+    <ClCompile Include="src\stdlib\token_tree.cpp" />
     <ClCompile Include="src\stdlib\url_coder.cpp" />
     <ClCompile Include="src\stdlib\util.cpp" />
     <ClCompile Include="src\stdlib\xml.cpp" />
@@ -608,6 +610,7 @@ copy $(TargetName).pdb ..\dist\lib\win64\$(TargetName).pdb /Y
     <ClInclude Include="include\acl_cpp\connpool\tcp_manager.hpp" />
     <ClInclude Include="include\acl_cpp\connpool\tcp_ipc.hpp" />
     <ClInclude Include="include\acl_cpp\db\db_handle.hpp" />
+    <ClInclude Include="include\acl_cpp\db\db_cursor.hpp" />
     <ClInclude Include="include\acl_cpp\db\db_mysql.hpp" />
     <ClInclude Include="include\acl_cpp\db\db_pgsql.hpp" />
     <ClInclude Include="include\acl_cpp\db\db_pool.hpp" />
@@ -623,6 +626,7 @@ copy $(TargetName).pdb ..\dist\lib\win64\$(TargetName).pdb /Y
     <ClInclude Include="include\acl_cpp\db\mysql_pool.hpp" />
     <ClInclude Include="include\acl_cpp\db\pgsql_pool.hpp" />
     <ClInclude Include="include\acl_cpp\db\sqlite_manager.hpp" />
+    <ClInclude Include="include\acl_cpp\db\sqlite_cursor.hpp" />
     <ClInclude Include="include\acl_cpp\db\sqlite_pool.hpp" />
     <ClInclude Include="include\acl_cpp\disque\disque.hpp" />
     <ClInclude Include="include\acl_cpp\disque\disque_cond.hpp" />
@@ -744,11 +748,13 @@ copy $(TargetName).pdb ..\dist\lib\win64\$(TargetName).pdb /Y
     <ClInclude Include="include\acl_cpp\stdlib\sha1.hpp" />
     <ClInclude Include="include\acl_cpp\stdlib\snprintf.hpp" />
     <ClInclude Include="include\acl_cpp\stdlib\string.hpp" />
+    <ClInclude Include="include\acl_cpp\stdlib\tbox.hpp" />
     <ClInclude Include="include\acl_cpp\stdlib\thread.hpp" />
     <ClInclude Include="include\acl_cpp\stdlib\thread_cond.hpp" />
     <ClInclude Include="include\acl_cpp\stdlib\thread_mutex.hpp" />
     <ClInclude Include="include\acl_cpp\stdlib\thread_pool.hpp" />
     <ClInclude Include="include\acl_cpp\stdlib\thread_queue.hpp" />
+    <ClInclude Include="include\acl_cpp\stdlib\token_tree.hpp" />
     <ClInclude Include="include\acl_cpp\stdlib\trigger.hpp" />
     <ClInclude Include="include\acl_cpp\stdlib\url_coder.hpp" />
     <ClInclude Include="include\acl_cpp\stdlib\util.hpp" />

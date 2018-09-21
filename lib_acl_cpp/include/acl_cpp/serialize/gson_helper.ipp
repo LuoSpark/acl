@@ -693,10 +693,12 @@ static inline gson(acl::json &json, const std::map<T, V*> *objects)
 
 //////////////////////////////////////////////////////////////////////////////
 
+#if 0
 template <class T>
 typename enable_if<is_object<T>::value,
 	std::pair<bool, std::string> >::type
 static inline gson(acl::json_node &node, T **obj);
+#endif
 
 template<class T>
 static inline void del(T **obj)
@@ -882,6 +884,13 @@ gson(acl::json_node &node, std::list<T> *objs)
 	std::pair<bool, std::string> result;
 	acl::json_node *itr = node.first_child();
 
+	if (itr == NULL)
+	{
+		// maybe the vector is empty ---zsx
+		objs->clear();
+		return std::make_pair(true, "");
+	}
+
 	while (itr)
 	{
 		// for avoiding object's member pointor copy, the obj can be
@@ -913,6 +922,13 @@ gson(acl::json_node &node, std::list<T*> *objs)
 	std::pair<bool, std::string> result;
 	acl::json_node *itr = node.first_child();
 
+	if (itr == NULL)
+	{
+		// maybe the vector is empty ---zsx
+		objs->clear();
+		return std::make_pair(true, "");
+	}
+
 	while (itr)
 	{
 		T* obj = new T;
@@ -940,6 +956,13 @@ static inline gson(acl::json_node &node, std::vector<T> *objs)
 	std::pair<bool, std::string> result;
 	acl::json_node *itr = node.first_child();
 
+	if (itr == NULL)
+	{
+		// maybe the vector is empty ---zsx
+		objs->clear();
+		return std::make_pair(true, "");
+	}
+
 	while (itr)
 	{
 		// for avoiding object's member pointor copy
@@ -950,9 +973,7 @@ static inline gson(acl::json_node &node, std::vector<T> *objs)
 		--it;
 		result = gson(*itr, &*it);
 		if (!result.first)
-		{
 			break;
-		}
 		itr = node.next_child();
 	}
 	if(result.first)
@@ -968,6 +989,13 @@ static inline gson(acl::json_node &node, std::vector<T*> *objs)
 {
 	std::pair<bool, std::string> result;
 	acl::json_node *itr = node.first_child();
+
+	if (itr == NULL)
+	{
+		// maybe the vector is empty ---zsx
+		objs->clear();
+		return std::make_pair(true, "");
+	}
 
 	while (itr)
 	{
@@ -1002,6 +1030,13 @@ static inline gson(acl::json_node &node, std::set<T*> *objs)
 	std::pair<bool, std::string> result;
 	acl::json_node *itr = node.first_child();
 
+	if (itr == NULL)
+	{
+		// maybe the vector is empty ---zsx
+		objs->clear();
+		return std::make_pair(true, "");
+	}
+
 	while (itr)
 	{
 		T* obj = new T;
@@ -1033,6 +1068,13 @@ static inline gson(acl::json_node &node, std::set<T> *objs)
 {
 	std::pair<bool, std::string> result;
 	acl::json_node *itr = node.first_child();
+
+	if (itr == NULL)
+	{
+		// maybe the vector is empty ---zsx
+		objs->clear();
+		return std::make_pair(true, "");
+	}
 
 	while (itr)
 	{

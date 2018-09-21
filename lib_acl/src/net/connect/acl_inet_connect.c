@@ -29,6 +29,7 @@
 #include "stdlib/acl_iostuff.h"
 #include "net/acl_tcp_ctl.h"
 #include "net/acl_netdb.h"
+#include "net/acl_valid_hostname.h"
 #include "net/acl_connect.h"
 
 #endif
@@ -71,17 +72,14 @@ static ACL_SOCKET inet_connect_one(const struct addrinfo *peer,
 	acl_tcp_set_rcvbuf(sock, ACL_SOCKET_RBUF_SIZE);
 	acl_tcp_set_sndbuf(sock, ACL_SOCKET_WBUF_SIZE);
 
-	if (local0 != NULL && bind_local(sock, peer->ai_family, local0) < 0)
-	{
+	if (local0 != NULL && bind_local(sock, peer->ai_family, local0) < 0) {
 		acl_msg_error("%s(%d): bind local error %s, fd=%d",
 			myname, __LINE__, acl_last_serror(), sock);
 		acl_socket_close(sock);
 		return ACL_SOCKET_INVALID;
 	}
 
-	/*
-	 * Timed connect.
-	 */
+	/* Timed connect. */
 	if (timeout > 0) {
 		acl_non_blocking(sock, ACL_NON_BLOCKING);
 #ifdef ACL_WINDOWS
@@ -106,14 +104,11 @@ static ACL_SOCKET inet_connect_one(const struct addrinfo *peer,
 		return sock;
 	}
 
-	/*
-	 * Maybe block until connected.
-	 */
+	/* Maybe block until connected. */
 	acl_non_blocking(sock, blocking);
 #ifdef ACL_WINDOWS
 	if (acl_sane_connect(sock, peer->ai_addr,
-		(socklen_t) peer->ai_addrlen) < 0)
-	{
+		(socklen_t) peer->ai_addrlen) < 0) {
 #else
 	if (acl_sane_connect(sock, peer->ai_addr, peer->ai_addrlen) < 0) {
 #endif
@@ -123,8 +118,7 @@ static ACL_SOCKET inet_connect_one(const struct addrinfo *peer,
 		errnum = acl_last_error();
 		len = sizeof(err);
 		if (getsockopt(sock, SOL_SOCKET, SO_ERROR,
-			(char *) &err, &len) < 0)
-		{
+			(char *) &err, &len) < 0) {
 #ifdef  SUNOS5
 			/*
 			 * Solaris 2.4's socket emulation doesn't allow you
@@ -178,7 +172,7 @@ ACL_SOCKET acl_inet_connect_ex(const char *addr, int blocking,
 	const char *myname = "acl_inet_connect_ex";
 	int err;
 	ACL_SOCKET  sock;
-	char  buf[256], *ptr;
+	char  buf[256], *ptr = NULL;
 	const char *peer, *local, *port;
 	struct addrinfo hints, *peer_res0, *res, *local_res0;
 
@@ -186,7 +180,15 @@ ACL_SOCKET acl_inet_connect_ex(const char *addr, int blocking,
 		*h_error = 0;
 
 	snprintf(buf, sizeof(buf) - 1, "%s", addr);
-	ptr = strrchr(buf, ':');
+
+	if (acl_valid_ipv6_hostaddr(buf, 0)) {
+		ptr = strrchr(buf, ACL_ADDR_SEP);
+	} else if (acl_valid_ipv4_hostaddr(buf, 0)) {
+		ptr = strrchr(buf, ACL_ADDR_SEP);
+		if (ptr == NULL)
+			ptr = strrchr(buf, ':');
+	}
+
 	if (ptr == NULL) {
 		acl_msg_error("%s, %s(%d): invalid addr(%s)",
 			__FILE__, myname, __LINE__, addr);
@@ -194,7 +196,8 @@ ACL_SOCKET acl_inet_connect_ex(const char *addr, int blocking,
 	}
 
 	*ptr++ = 0;
-	port = ptr;
+	port   = ptr;
+
 	if (atoi(port) <= 0) {
 		acl_msg_error("%s, %s(%d): invalid port(%s)",
 			__FILE__, myname, __LINE__, port);
@@ -258,9 +261,8 @@ ACL_SOCKET acl_inet_connect_ex(const char *addr, int blocking,
 	}
 
 	if (sock == ACL_SOCKET_INVALID)
-		acl_msg_error("%s(%d) %s: connect error %s, addr=%s:%s",
-			__FILE__, __LINE__, myname,
-			acl_last_serror(), peer, port);
+		acl_msg_error("%s(%d) %s: connect error %s, addr=%s",
+			__FILE__, __LINE__, myname, acl_last_serror(), addr);
 
 	if (peer_res0)
 		freeaddrinfo(peer_res0);

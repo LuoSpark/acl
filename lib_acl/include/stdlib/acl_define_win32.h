@@ -94,6 +94,7 @@
 # endif
 
 # include <ws2tcpip.h> /* for getaddrinfo */
+# include <netioapi.h>
 
 # ifdef	ACL_BCB_COMPILER
 #  pragma hdrstop
@@ -145,7 +146,7 @@ typedef int socklen_t;
 # define	ACL_DLL_FARPROC		FARPROC
 # ifndef	HAS_SSIZE_T
 #  define	HAS_SSIZE_T
-typedef long ssize_t;
+typedef intptr_t ssize_t;
 # endif
 
 # define ACL_INTERNAL_LOCK	ACL_FLOCK_STYLE_FLOCK

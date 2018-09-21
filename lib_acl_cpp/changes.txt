@@ -1,5 +1,57 @@
 修改历史列表：
 
+538) 2018.9.16
+538.1) feature: acl::socket_stream 增加 sock_type 来判断 socket 类型
+
+537) 2018.9.8
+537.1) bugfix: acl::string::begin_with 判断方法有误
+
+536) 2018.9.2
+536.1) feature: 添加 sqlite_cursor 类，从而使 db_sqlite 支持 Sqlite 游标功能
+
+535) 2018.8.19
+535.1) feature: 添加 token_tree 类，该类封装了 C 版的 256 叉匹配树算法
+
+534) 2018.8.17
+534.1) workaround: thread_cond::wait, server_socket::accept 参数含义发生改变
+
+533) 2018.8.7
+533.1) bugfix: db_mysql.cpp, 如果在执行操作的时候，发现跟mysql已经断开链接了，
+就会重连，万一在连接时间内都没有重连成功，就会释放掉MYSQL*指针，造成这个连接对象
+永不可用了。因为dbmysql::sane_mysql_query函数判断conn_为null就直接返回了
+--- young_hb
+
+532) 2018.8.2
+532.1) bugfix: gson_helper.ipp 在处理空数组时有误
+
+531) 2018.7.27
+531.1) feature: tbox 模板类允许传递空消息对象
+
+530) 2018.7.24
+530.1) bugfix: json 序列化工具对 double/float 类型且值不带小数部分时的支持不够
+完善，通过在 acl::json_node::is_double 增加针对整数的支持得以解决
+
+530.2) feature: acl::string 支持更多与 std::string 之间的互相操作
+
+529) 2018.7.10
+529.1) bugfix: acl::HttpServlet 当 session 对象内部创建时，需在析构函数里将其
+释放，否则会造成内存泄露。
+
+528) 2018.7.5
+528.1) feature: acl::fstream 增加文件锁方法
+
+527) 2018.6.29
+527.1) bugfix: acl::thread 线程对象被创建时，默认采用非分离状态，以便于和操作
+系统的 API 行为相近，原来采用的是分离状态。
+
+526) 2018.6.28
+526.1) feature: tbox 类完全由 C++ 模板类实现，不再依赖于 C 版中的消息队列，
+代码更简洁清晰
+
+525) 2018.6.15
+525.1) feature: thread_cond 类中的 wait 方法参加参数 locked，内部会先判断该
+参数决定是否需要加锁
+
 524) 2018.6.4
 524.1) feature: connect_monitor 类增加三个虚方法：on_connected, on_refused,
 on_timeout

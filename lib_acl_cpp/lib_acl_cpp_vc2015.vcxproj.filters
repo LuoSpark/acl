@@ -352,6 +352,9 @@
     <ClCompile Include="src\db\pgsql_pool.cpp">
       <Filter>Source Files\db</Filter>
     </ClCompile>
+    <ClCompile Include="src\db\sqlite_cursor.cpp">
+      <Filter>Source Files\db</Filter>
+    </ClCompile>
     <ClCompile Include="src\db\sqlite_pool.cpp">
       <Filter>Source Files\db</Filter>
     </ClCompile>
@@ -539,6 +542,9 @@
       <Filter>Source Files\disque</Filter>
     </ClCompile>
     <ClCompile Include="src\stdlib\thread_queue.cpp">
+      <Filter>Source Files\stdlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\stdlib\token_tree.cpp">
       <Filter>Source Files\stdlib</Filter>
     </ClCompile>
     <ClCompile Include="src\redis\redis_geo.cpp">
@@ -951,10 +957,16 @@
     <ClInclude Include="include\acl_cpp\stream\aio_fstream.hpp">
       <Filter>Header Files\stream</Filter>
     </ClInclude>
+    <ClInclude Include="include\acl_cpp\db\db_cursor.hpp">
+      <Filter>Header Files\db</Filter>
+    </ClInclude>
     <ClInclude Include="include\acl_cpp\db\mysql_pool.hpp">
       <Filter>Header Files\db</Filter>
     </ClInclude>
     <ClInclude Include="include\acl_cpp\db\pgsql_pool.hpp">
+      <Filter>Header Files\db</Filter>
+    </ClInclude>
+    <ClInclude Include="include\acl_cpp\db\sqlite_cursor.hpp">
       <Filter>Header Files\db</Filter>
     </ClInclude>
     <ClInclude Include="include\acl_cpp\db\sqlite_pool.hpp">
@@ -1004,6 +1016,9 @@
     </ClInclude>
     <ClInclude Include="include\acl_cpp\master\master_udp.hpp">
       <Filter>Header Files\master</Filter>
+    </ClInclude>
+    <ClInclude Include="include\acl_cpp\stdlib\tbox.hpp">
+      <Filter>Header Files\stdlib</Filter>
     </ClInclude>
     <ClInclude Include="include\acl_cpp\stdlib\thread.hpp">
       <Filter>Header Files\stdlib</Filter>
@@ -1153,6 +1168,9 @@
       <Filter>Header Files\disque</Filter>
     </ClInclude>
     <ClInclude Include="include\acl_cpp\stdlib\thread_queue.hpp">
+      <Filter>Header Files\stdlib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\acl_cpp\stdlib\token_tree.hpp">
       <Filter>Header Files\stdlib</Filter>
     </ClInclude>
     <ClInclude Include="include\acl_cpp\stdlib\trigger.hpp">

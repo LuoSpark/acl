@@ -13,7 +13,7 @@ namespace acl
 {
 
 thread::thread()
-: detachable_(true)
+: detachable_(false)
 , stack_size_(0)
 , thread_id_(0)
 {
@@ -48,7 +48,11 @@ void* thread::thread_run(void* arg)
 #ifdef	ACL_WINDOWS
 	thr->thread_id_ = GetCurrentThreadId();
 #elif	defined(ACL_FREEBSD)
+#if defined(__FreeBSD__) && (__FreeBSD__ >= 9)
 	thr->thread_id_ = pthread_getthreadid_np();
+#else
+	thr->thread_id_ = (unsigned long) pthread_self();
+#endif
 #elif	defined(ACL_MACOSX)
 	unsigned long long n;
 	(void) pthread_threadid_np(NULL, &n);
@@ -176,7 +180,11 @@ unsigned long thread::thread_id() const
 unsigned long thread::thread_self()
 {
 #ifdef	ACL_FREEBSD
+#if defined(__FreeBSD__) && (__FreeBSD__ >= 9)
 	return (unsigned long) pthread_getthreadid_np();
+#else
+	return (unsigned long) acl_pthread_self();
+#endif
 #elif	defined(ACL_MACOSX)
 	unsigned long long n;
 	(void) pthread_threadid_np(NULL, &n);
